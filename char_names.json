@@ -1,0 +1,235 @@
+{
+  "char_names": [
+    {
+      "index": 0,
+      "pc": "0x00E15B",
+      "snes": "0xC0E15B",
+      "text": "DICK",
+      "raw_hex": "4449434b20202020202020ff"
+    },
+    {
+      "index": 1,
+      "pc": "0x00E167",
+      "snes": "0xC0E167",
+      "text": "SPIDER",
+      "raw_hex": "5350494445522020202020ff"
+    },
+    {
+      "index": 2,
+      "pc": "0x00E173",
+      "snes": "0xC0E173",
+      "text": "KYTHRING",
+      "raw_hex": "4b59544852494e47202020ff"
+    },
+    {
+      "index": 3,
+      "pc": "0x00E17F",
+      "snes": "0xC0E17F",
+      "text": "MCCOY",
+      "raw_hex": "4d43434f59202020202020ff"
+    },
+    {
+      "index": 4,
+      "pc": "0x00E18B",
+      "snes": "0xC0E18B",
+      "text": "JIMMY",
+      "raw_hex": "4a494d4d59202020202020ff"
+    },
+    {
+      "index": 5,
+      "pc": "0x00E197",
+      "snes": "0xC0E197",
+      "text": "DAG",
+      "raw_hex": "4441472020202020202020ff"
+    },
+    {
+      "index": 6,
+      "pc": "0x00E1A3",
+      "snes": "0xC0E1A3",
+      "text": "M-FRAME",
+      "raw_hex": "4d2d4652414d4520202020ff"
+    },
+    {
+      "index": 7,
+      "pc": "0x00E1AF",
+      "snes": "0xC0E1AF",
+      "text": "CELL",
+      "raw_hex": "43454c4c20202020202020ff"
+    },
+    {
+      "index": 8,
+      "pc": "0x00E1BB",
+      "snes": "0xC0E1BB",
+      "text": "ELFIN",
+      "raw_hex": "454c46494e202020202020ff"
+    },
+    {
+      "index": 9,
+      "pc": "0x00E1C7",
+      "snes": "0xC0E1C7",
+      "text": "BART",
+      "raw_hex": "4241525420202020202020ff"
+    },
+    {
+      "index": 10,
+      "pc": "0x00E1D3",
+      "snes": "0xC0E1D3",
+      "text": "NORTON",
+      "raw_hex": "4e4f52544f4e2020202020ff"
+    },
+    {
+      "index": 11,
+      "pc": "0x00E1DF",
+      "snes": "0xC0E1DF",
+      "text": "KULMBACH",
+      "raw_hex": "4b554c4d42414348202020ff"
+    },
+    {
+      "index": 12,
+      "pc": "0x00E1EB",
+      "snes": "0xC0E1EB",
+      "text": "AXE",
+      "raw_hex": "4158452020202020202020ff"
+    },
+    {
+      "index": 13,
+      "pc": "0x00E1F7",
+      "snes": "0xC0E1F7",
+      "text": "BOB",
+      "raw_hex": "424f422020202020202020ff"
+    },
+    {
+      "index": 14,
+      "pc": "0x00E203",
+      "snes": "0xC0E203",
+      "text": "JOE",
+      "raw_hex": "4a4f452020202020202020ff"
+    },
+    {
+      "index": 15,
+      "pc": "0x00E20F",
+      "snes": "0xC0E20F",
+      "text": "JONY",
+      "raw_hex": "4a4f4e5920202020202020ff"
+    },
+    {
+      "index": 16,
+      "pc": "0x00E21B",
+      "snes": "0xC0E21B",
+      "text": "YAMAOKA",
+      "raw_hex": "59414d414f4b4120202020ff"
+    },
+    {
+      "index": 17,
+      "pc": "0x00E227",
+      "snes": "0xC0E227",
+      "text": "???????????",
+      "raw_hex": "3f3f3f3f3f3f3f3f3f3f3fff"
+    },
+    {
+      "index": 18,
+      "pc": "0x00E233",
+      "snes": "0xC0E233",
+      "text": "DEAN",
+      "raw_hex": "4445414e20202020202020ff"
+    },
+    {
+      "index": 19,
+      "pc": "0x00E23F",
+      "snes": "0xC0E23F",
+      "text": "VELK",
+      "raw_hex": "56454c4b20202020202020ff"
+    },
+    {
+      "index": 20,
+      "pc": "0x00E24B",
+      "snes": "0xC0E24B",
+      "text": "EIJI",
+      "raw_hex": "45494a4920202020202020ff"
+    },
+    {
+      "index": 21,
+      "pc": "0x00E257",
+      "snes": "0xC0E257",
+      "text": "ONIDO",
+      "raw_hex": "4f4e49444f202020202020ff"
+    },
+    {
+      "index": 22,
+      "pc": "0x00E263",
+      "snes": "0xC0E263",
+      "text": "BURNET",
+      "raw_hex": "4255524e45542020202020ff"
+    },
+    {
+      "index": 23,
+      "pc": "0x00E26F",
+      "snes": "0xC0E26F",
+      "text": "CALSONIC",
+      "raw_hex": "43414c534f4e4943202020ff"
+    },
+    {
+      "index": 24,
+      "pc": "0x00E27B",
+      "snes": "0xC0E27B",
+      "text": "KIRA",
+      "raw_hex": "4b49524120202020202020ff"
+    },
+    {
+      "index": 25,
+      "pc": "0x00E287",
+      "snes": "0xC0E287",
+      "text": "HUNTER",
+      "raw_hex": "48554e5445522020202020ff"
+    },
+    {
+      "index": 26,
+      "pc": "0x00E293",
+      "snes": "0xC0E293",
+      "text": "HELHEIM",
+      "raw_hex": "48454c4845494d20202020ff"
+    },
+    {
+      "index": 27,
+      "pc": "0x00E29F",
+      "snes": "0xC0E29F",
+      "text": "TOMY",
+      "raw_hex": "544f4d5920202020202020ff"
+    },
+    {
+      "index": 28,
+      "pc": "0x00E2AB",
+      "snes": "0xC0E2AB",
+      "text": "DRUM",
+      "raw_hex": "4452554d20202020202020ff"
+    },
+    {
+      "index": 29,
+      "pc": "0x00E2B7",
+      "snes": "0xC0E2B7",
+      "text": "BOX",
+      "raw_hex": "424f582020202020202020ff"
+    },
+    {
+      "index": 30,
+      "pc": "0x00E2C3",
+      "snes": "0xC0E2C3",
+      "text": "TUBO",
+      "raw_hex": "5455424f20202020202020ff"
+    },
+    {
+      "index": 31,
+      "pc": "0x00E2CF",
+      "snes": "0xC0E2CF",
+      "text": "ROBODATA",
+      "raw_hex": "524f424f44415441202020ff"
+    },
+    {
+      "index": 32,
+      "pc": "0x00FFFF",
+      "snes": "0xC0FFFF",
+      "text": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001\u0000\u0002\u0000",
+      "raw_hex": "000000000000000001000200"
+    }
+  ]
+}

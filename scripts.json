@@ -1,0 +1,2309 @@
+{
+  "scripts": [
+    {
+      "script_index": 0,
+      "bank": "0x81",
+      "data_pc": "0x01B862",
+      "entries": [
+        {
+          "dest_offset": "0x005C",
+          "length": 4,
+          "data_hex": "636487b1"
+        },
+        {
+          "dest_offset": "0x009C",
+          "length": 4,
+          "data_hex": "646388b0"
+        },
+        {
+          "dest_offset": "0x00DC",
+          "length": 4,
+          "data_hex": "63c587b1"
+        },
+        {
+          "dest_offset": "0x011C",
+          "length": 4,
+          "data_hex": "7071c7b0"
+        },
+        {
+          "dest_offset": "0x015C",
+          "length": 4,
+          "data_hex": "727387b1"
+        },
+        {
+          "dest_offset": "0x019C",
+          "length": 4,
+          "data_hex": "747588b0"
+        },
+        {
+          "dest_offset": "0x01DC",
+          "length": 4,
+          "data_hex": "727587b1"
+        },
+        {
+          "dest_offset": "0x021C",
+          "length": 4,
+          "data_hex": "7475c7b0"
+        },
+        {
+          "dest_offset": "0x025C",
+          "length": 4,
+          "data_hex": "7677c8c9"
+        },
+        {
+          "dest_offset": "0x029B",
+          "length": 5,
+          "data_hex": "117879b4b5"
+        },
+        {
+          "dest_offset": "0x02DB",
+          "length": 5,
+          "data_hex": "12137a85b1"
+        },
+        {
+          "dest_offset": "0x031C",
+          "length": 4,
+          "data_hex": "14156086"
+        }
+      ]
+    },
+    {
+      "script_index": 1,
+      "bank": "0x81",
+      "data_pc": "0x01B90C",
+      "entries": []
+    },
+    {
+      "script_index": 2,
+      "bank": "0x81",
+      "data_pc": "0x01B8C6",
+      "entries": [
+        {
+          "dest_offset": "0x0179",
+          "length": 5,
+          "data_hex": "9a99989990"
+        },
+        {
+          "dest_offset": "0x01D9",
+          "length": 5,
+          "data_hex": "9c35353591"
+        },
+        {
+          "dest_offset": "0x0239",
+          "length": 5,
+          "data_hex": "9b35353592"
+        },
+        {
+          "dest_offset": "0x0299",
+          "length": 5,
+          "data_hex": "9b35353593"
+        },
+        {
+          "dest_offset": "0x02F9",
+          "length": 5,
+          "data_hex": "9e8f8f8f94"
+        },
+        {
+          "dest_offset": "0x0359",
+          "length": 5,
+          "data_hex": "9d97969795"
+        },
+        {
+          "dest_offset": "0x04B3",
+          "length": 3,
+          "data_hex": "3a3b3c"
+        },
+        {
+          "dest_offset": "0x0513",
+          "length": 3,
+          "data_hex": "3d3e3f"
+        }
+      ]
+    },
+    {
+      "script_index": 3,
+      "bank": "0x81",
+      "data_pc": "0x01B90E",
+      "entries": [
+        {
+          "dest_offset": "0x0511",
+          "length": 4,
+          "data_hex": "b0b1b2b3"
+        },
+        {
+          "dest_offset": "0x0531",
+          "length": 4,
+          "data_hex": "b4b5b6b7"
+        },
+        {
+          "dest_offset": "0x0551",
+          "length": 4,
+          "data_hex": "b8b9babb"
+        }
+      ]
+    },
+    {
+      "script_index": 4,
+      "bank": "0x81",
+      "data_pc": "0x01B928",
+      "entries": [
+        {
+          "dest_offset": "0x054B",
+          "length": 4,
+          "data_hex": "d0d1d2d3"
+        },
+        {
+          "dest_offset": "0x056B",
+          "length": 4,
+          "data_hex": "d4d5d6d7"
+        },
+        {
+          "dest_offset": "0x058B",
+          "length": 4,
+          "data_hex": "d8d9dadb"
+        }
+      ]
+    },
+    {
+      "script_index": 5,
+      "bank": "0x81",
+      "data_pc": "0x01B942",
+      "entries": [
+        {
+          "dest_offset": "0x010E",
+          "length": 4,
+          "data_hex": "b0b1b2b3"
+        },
+        {
+          "dest_offset": "0x012E",
+          "length": 4,
+          "data_hex": "b4b5b6b7"
+        },
+        {
+          "dest_offset": "0x014E",
+          "length": 4,
+          "data_hex": "b8b9babb"
+        }
+      ]
+    },
+    {
+      "script_index": 6,
+      "bank": "0x81",
+      "data_pc": "0x01B95C",
+      "entries": [
+        {
+          "dest_offset": "0x0248",
+          "length": 4,
+          "data_hex": "acadaeaf"
+        },
+        {
+          "dest_offset": "0x0268",
+          "length": 4,
+          "data_hex": "bcbdbebf"
+        },
+        {
+          "dest_offset": "0x0288",
+          "length": 4,
+          "data_hex": "cccdcecf"
+        },
+        {
+          "dest_offset": "0x02A8",
+          "length": 4,
+          "data_hex": "dcdddedf"
+        }
+      ]
+    },
+    {
+      "script_index": 7,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 8,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 9,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 10,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 11,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 12,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 13,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 14,
+      "bank": "0x81",
+      "data_pc": "0x01B97E",
+      "entries": []
+    },
+    {
+      "script_index": 15,
+      "bank": "0x81",
+      "data_pc": "0x01B980",
+      "entries": [
+        {
+          "dest_offset": "0x0908",
+          "length": 9,
+          "data_hex": "121314151617020301"
+        },
+        {
+          "dest_offset": "0x0928",
+          "length": 9,
+          "data_hex": "2223242526272d0604"
+        },
+        {
+          "dest_offset": "0x0948",
+          "length": 9,
+          "data_hex": "3233343536373b3c07"
+        },
+        {
+          "dest_offset": "0x0968",
+          "length": 9,
+          "data_hex": "1a1b1c1d1e1f3d0c0a"
+        },
+        {
+          "dest_offset": "0x0988",
+          "length": 9,
+          "data_hex": "2a2b2c0e2e2f3e0f0d"
+        }
+      ]
+    },
+    {
+      "script_index": 16,
+      "bank": "0x81",
+      "data_pc": "0x01B9C3",
+      "entries": [
+        {
+          "dest_offset": "0x000C",
+          "length": 4,
+          "data_hex": "5848495a"
+        },
+        {
+          "dest_offset": "0x004C",
+          "length": 4,
+          "data_hex": "4858494a"
+        },
+        {
+          "dest_offset": "0x008C",
+          "length": 4,
+          "data_hex": "481e594a"
+        },
+        {
+          "dest_offset": "0x00CC",
+          "length": 4,
+          "data_hex": "2d2e1f5a"
+        },
+        {
+          "dest_offset": "0x010C",
+          "length": 4,
+          "data_hex": "3d3e2f4a"
+        },
+        {
+          "dest_offset": "0x014C",
+          "length": 4,
+          "data_hex": "4d4e3f4a"
+        },
+        {
+          "dest_offset": "0x018C",
+          "length": 4,
+          "data_hex": "5d5e4f5a"
+        },
+        {
+          "dest_offset": "0x01CC",
+          "length": 4,
+          "data_hex": "6d6e5f4a"
+        },
+        {
+          "dest_offset": "0x020C",
+          "length": 4,
+          "data_hex": "7d7e6ffd"
+        },
+        {
+          "dest_offset": "0x024C",
+          "length": 4,
+          "data_hex": "8d8e7ffe"
+        },
+        {
+          "dest_offset": "0x028B",
+          "length": 5,
+          "data_hex": "3233348ffd"
+        },
+        {
+          "dest_offset": "0x02CC",
+          "length": 4,
+          "data_hex": "43449f4a"
+        },
+        {
+          "dest_offset": "0x030C",
+          "length": 4,
+          "data_hex": "5354dd9e"
+        }
+      ]
+    },
+    {
+      "script_index": 17,
+      "bank": "0x81",
+      "data_pc": "0x01BA2E",
+      "entries": [
+        {
+          "dest_offset": "0x000C",
+          "length": 4,
+          "data_hex": "5848495a"
+        },
+        {
+          "dest_offset": "0x002C",
+          "length": 4,
+          "data_hex": "4858494a"
+        },
+        {
+          "dest_offset": "0x004C",
+          "length": 4,
+          "data_hex": "481e594a"
+        },
+        {
+          "dest_offset": "0x006C",
+          "length": 4,
+          "data_hex": "2d2e1f5a"
+        },
+        {
+          "dest_offset": "0x008C",
+          "length": 4,
+          "data_hex": "3d3e2f4a"
+        },
+        {
+          "dest_offset": "0x00AC",
+          "length": 4,
+          "data_hex": "4d4e3f4a"
+        },
+        {
+          "dest_offset": "0x00CC",
+          "length": 4,
+          "data_hex": "5d5e4f5a"
+        },
+        {
+          "dest_offset": "0x00EC",
+          "length": 4,
+          "data_hex": "6d6e5f4a"
+        },
+        {
+          "dest_offset": "0x010C",
+          "length": 4,
+          "data_hex": "7d7e6ffd"
+        },
+        {
+          "dest_offset": "0x012C",
+          "length": 4,
+          "data_hex": "8d8e7ffe"
+        },
+        {
+          "dest_offset": "0x014B",
+          "length": 5,
+          "data_hex": "3233348ffd"
+        },
+        {
+          "dest_offset": "0x016C",
+          "length": 4,
+          "data_hex": "43449f4a"
+        },
+        {
+          "dest_offset": "0x018C",
+          "length": 4,
+          "data_hex": "5354dd9e"
+        }
+      ]
+    },
+    {
+      "script_index": 18,
+      "bank": "0x81",
+      "data_pc": "0x01BA99",
+      "entries": [
+        {
+          "dest_offset": "0x013D",
+          "length": 2,
+          "data_hex": "6353"
+        },
+        {
+          "dest_offset": "0x017D",
+          "length": 2,
+          "data_hex": "6960"
+        },
+        {
+          "dest_offset": "0x01BD",
+          "length": 2,
+          "data_hex": "6a6b"
+        },
+        {
+          "dest_offset": "0x01FD",
+          "length": 2,
+          "data_hex": "6c6d"
+        },
+        {
+          "dest_offset": "0x023D",
+          "length": 2,
+          "data_hex": "6e6f"
+        },
+        {
+          "dest_offset": "0x027D",
+          "length": 2,
+          "data_hex": "7071"
+        },
+        {
+          "dest_offset": "0x02BD",
+          "length": 2,
+          "data_hex": "6472"
+        },
+        {
+          "dest_offset": "0x02FC",
+          "length": 3,
+          "data_hex": "686865"
+        },
+        {
+          "dest_offset": "0x033D",
+          "length": 2,
+          "data_hex": "0c0c"
+        }
+      ]
+    },
+    {
+      "script_index": 19,
+      "bank": "0x81",
+      "data_pc": "0x01BB0B",
+      "entries": [
+        {
+          "dest_offset": "0x013D",
+          "length": 2,
+          "data_hex": "5153"
+        },
+        {
+          "dest_offset": "0x017D",
+          "length": 2,
+          "data_hex": "5d52"
+        },
+        {
+          "dest_offset": "0x01BD",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x01FD",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x023D",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x027D",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x02BD",
+          "length": 2,
+          "data_hex": "5a5b"
+        },
+        {
+          "dest_offset": "0x02FC",
+          "length": 3,
+          "data_hex": "0b0b5c"
+        },
+        {
+          "dest_offset": "0x033D",
+          "length": 2,
+          "data_hex": "0c0c"
+        }
+      ]
+    },
+    {
+      "script_index": 20,
+      "bank": "0x81",
+      "data_pc": "0x01BA99",
+      "entries": [
+        {
+          "dest_offset": "0x013D",
+          "length": 2,
+          "data_hex": "6353"
+        },
+        {
+          "dest_offset": "0x017D",
+          "length": 2,
+          "data_hex": "6960"
+        },
+        {
+          "dest_offset": "0x01BD",
+          "length": 2,
+          "data_hex": "6a6b"
+        },
+        {
+          "dest_offset": "0x01FD",
+          "length": 2,
+          "data_hex": "6c6d"
+        },
+        {
+          "dest_offset": "0x023D",
+          "length": 2,
+          "data_hex": "6e6f"
+        },
+        {
+          "dest_offset": "0x027D",
+          "length": 2,
+          "data_hex": "7071"
+        },
+        {
+          "dest_offset": "0x02BD",
+          "length": 2,
+          "data_hex": "6472"
+        },
+        {
+          "dest_offset": "0x02FC",
+          "length": 3,
+          "data_hex": "686865"
+        },
+        {
+          "dest_offset": "0x033D",
+          "length": 2,
+          "data_hex": "0c0c"
+        }
+      ]
+    },
+    {
+      "script_index": 21,
+      "bank": "0x81",
+      "data_pc": "0x01BB0B",
+      "entries": [
+        {
+          "dest_offset": "0x013D",
+          "length": 2,
+          "data_hex": "5153"
+        },
+        {
+          "dest_offset": "0x017D",
+          "length": 2,
+          "data_hex": "5d52"
+        },
+        {
+          "dest_offset": "0x01BD",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x01FD",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x023D",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x027D",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x02BD",
+          "length": 2,
+          "data_hex": "5a5b"
+        },
+        {
+          "dest_offset": "0x02FC",
+          "length": 3,
+          "data_hex": "0b0b5c"
+        },
+        {
+          "dest_offset": "0x033D",
+          "length": 2,
+          "data_hex": "0c0c"
+        }
+      ]
+    },
+    {
+      "script_index": 22,
+      "bank": "0x81",
+      "data_pc": "0x01BAD2",
+      "entries": [
+        {
+          "dest_offset": "0x093D",
+          "length": 2,
+          "data_hex": "6353"
+        },
+        {
+          "dest_offset": "0x097D",
+          "length": 2,
+          "data_hex": "6960"
+        },
+        {
+          "dest_offset": "0x09BD",
+          "length": 2,
+          "data_hex": "6a6b"
+        },
+        {
+          "dest_offset": "0x09FD",
+          "length": 2,
+          "data_hex": "6c6d"
+        },
+        {
+          "dest_offset": "0x0A3D",
+          "length": 2,
+          "data_hex": "6e6f"
+        },
+        {
+          "dest_offset": "0x0A7D",
+          "length": 2,
+          "data_hex": "7071"
+        },
+        {
+          "dest_offset": "0x0ABD",
+          "length": 2,
+          "data_hex": "6472"
+        },
+        {
+          "dest_offset": "0x0AFC",
+          "length": 3,
+          "data_hex": "686865"
+        },
+        {
+          "dest_offset": "0x0B3D",
+          "length": 2,
+          "data_hex": "0c0c"
+        }
+      ]
+    },
+    {
+      "script_index": 23,
+      "bank": "0x81",
+      "data_pc": "0x01BB44",
+      "entries": [
+        {
+          "dest_offset": "0x093D",
+          "length": 2,
+          "data_hex": "5153"
+        },
+        {
+          "dest_offset": "0x097D",
+          "length": 2,
+          "data_hex": "5d52"
+        },
+        {
+          "dest_offset": "0x09BD",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x09FD",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x0A3D",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x0A7D",
+          "length": 2,
+          "data_hex": "5d55"
+        },
+        {
+          "dest_offset": "0x0ABD",
+          "length": 2,
+          "data_hex": "b4b5"
+        },
+        {
+          "dest_offset": "0x0AFC",
+          "length": 3,
+          "data_hex": "0b0bb6"
+        },
+        {
+          "dest_offset": "0x0B3D",
+          "length": 2,
+          "data_hex": "0c0c"
+        }
+      ]
+    },
+    {
+      "script_index": 24,
+      "bank": "0x81",
+      "data_pc": "0x01BB7D",
+      "entries": [
+        {
+          "dest_offset": "0x013B",
+          "length": 2,
+          "data_hex": "6670"
+        },
+        {
+          "dest_offset": "0x018B",
+          "length": 2,
+          "data_hex": "6467"
+        },
+        {
+          "dest_offset": "0x01DB",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x022B",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x027B",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x02CB",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x031B",
+          "length": 2,
+          "data_hex": "6354"
+        },
+        {
+          "dest_offset": "0x036A",
+          "length": 3,
+          "data_hex": "112465"
+        },
+        {
+          "dest_offset": "0x03BB",
+          "length": 2,
+          "data_hex": "0274"
+        }
+      ]
+    },
+    {
+      "script_index": 25,
+      "bank": "0x81",
+      "data_pc": "0x01BBB6",
+      "entries": [
+        {
+          "dest_offset": "0x00DC",
+          "length": 4,
+          "data_hex": "989a9a9b"
+        },
+        {
+          "dest_offset": "0x011C",
+          "length": 4,
+          "data_hex": "86505087"
+        },
+        {
+          "dest_offset": "0x015C",
+          "length": 4,
+          "data_hex": "96505087"
+        },
+        {
+          "dest_offset": "0x019C",
+          "length": 4,
+          "data_hex": "86505087"
+        },
+        {
+          "dest_offset": "0x01DC",
+          "length": 4,
+          "data_hex": "96505097"
+        },
+        {
+          "dest_offset": "0x021C",
+          "length": 4,
+          "data_hex": "92939495"
+        }
+      ]
+    },
+    {
+      "script_index": 26,
+      "bank": "0x81",
+      "data_pc": "0x01BBE8",
+      "entries": [
+        {
+          "dest_offset": "0x0235",
+          "length": 3,
+          "data_hex": "f87777"
+        },
+        {
+          "dest_offset": "0x0275",
+          "length": 3,
+          "data_hex": "b0f677"
+        },
+        {
+          "dest_offset": "0x02B5",
+          "length": 3,
+          "data_hex": "c0c0f7"
+        },
+        {
+          "dest_offset": "0x02F5",
+          "length": 3,
+          "data_hex": "d0d0f9"
+        },
+        {
+          "dest_offset": "0x0335",
+          "length": 3,
+          "data_hex": "e0e0fa"
+        }
+      ]
+    },
+    {
+      "script_index": 27,
+      "bank": "0x81",
+      "data_pc": "0x01BC0D",
+      "entries": [
+        {
+          "dest_offset": "0x006C",
+          "length": 2,
+          "data_hex": "6670"
+        },
+        {
+          "dest_offset": "0x008C",
+          "length": 2,
+          "data_hex": "6467"
+        },
+        {
+          "dest_offset": "0x00AC",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x00CC",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x00EC",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x010C",
+          "length": 2,
+          "data_hex": "6454"
+        },
+        {
+          "dest_offset": "0x012C",
+          "length": 2,
+          "data_hex": "fd54"
+        },
+        {
+          "dest_offset": "0x014B",
+          "length": 3,
+          "data_hex": "1124fe"
+        },
+        {
+          "dest_offset": "0x016C",
+          "length": 2,
+          "data_hex": "80bb"
+        }
+      ]
+    },
+    {
+      "script_index": 28,
+      "bank": "0x81",
+      "data_pc": "0x01BC46",
+      "entries": []
+    },
+    {
+      "script_index": 29,
+      "bank": "0x81",
+      "data_pc": "0x01BC46",
+      "entries": []
+    },
+    {
+      "script_index": 30,
+      "bank": "0x81",
+      "data_pc": "0x01BC46",
+      "entries": []
+    },
+    {
+      "script_index": 31,
+      "bank": "0x81",
+      "data_pc": "0x01BC48",
+      "entries": [
+        {
+          "dest_offset": "0x00BB",
+          "length": 5,
+          "data_hex": "2961292829"
+        },
+        {
+          "dest_offset": "0x00FB",
+          "length": 5,
+          "data_hex": "6263642928"
+        },
+        {
+          "dest_offset": "0x013B",
+          "length": 5,
+          "data_hex": "6566672829"
+        },
+        {
+          "dest_offset": "0x017B",
+          "length": 5,
+          "data_hex": "7071722961"
+        },
+        {
+          "dest_offset": "0x01BB",
+          "length": 5,
+          "data_hex": "2973746263"
+        },
+        {
+          "dest_offset": "0x01FB",
+          "length": 5,
+          "data_hex": "2829286566"
+        },
+        {
+          "dest_offset": "0x023B",
+          "length": 5,
+          "data_hex": "3028297071"
+        },
+        {
+          "dest_offset": "0x027B",
+          "length": 5,
+          "data_hex": "3132282973"
+        }
+      ]
+    },
+    {
+      "script_index": 32,
+      "bank": "0x81",
+      "data_pc": "0x01BC48",
+      "entries": [
+        {
+          "dest_offset": "0x00BB",
+          "length": 5,
+          "data_hex": "2961292829"
+        },
+        {
+          "dest_offset": "0x00FB",
+          "length": 5,
+          "data_hex": "6263642928"
+        },
+        {
+          "dest_offset": "0x013B",
+          "length": 5,
+          "data_hex": "6566672829"
+        },
+        {
+          "dest_offset": "0x017B",
+          "length": 5,
+          "data_hex": "7071722961"
+        },
+        {
+          "dest_offset": "0x01BB",
+          "length": 5,
+          "data_hex": "2973746263"
+        },
+        {
+          "dest_offset": "0x01FB",
+          "length": 5,
+          "data_hex": "2829286566"
+        },
+        {
+          "dest_offset": "0x023B",
+          "length": 5,
+          "data_hex": "3028297071"
+        },
+        {
+          "dest_offset": "0x027B",
+          "length": 5,
+          "data_hex": "3132282973"
+        }
+      ]
+    },
+    {
+      "script_index": 33,
+      "bank": "0x83",
+      "data_pc": "0x03D5B0",
+      "entries": [
+        {
+          "dest_offset": "0x0000",
+          "length": 16,
+          "data_hex": "3e3f49493e3f7d4e4f4f4f4f4f565657"
+        },
+        {
+          "dest_offset": "0x0040",
+          "length": 16,
+          "data_hex": "495d62497e7f80644f4f4f4f4f565670"
+        },
+        {
+          "dest_offset": "0x0080",
+          "length": 16,
+          "data_hex": "49696c81828384854f4f4f4f4f565670"
+        },
+        {
+          "dest_offset": "0x00C0",
+          "length": 16,
+          "data_hex": "4973868788898a8b77787a787879797b"
+        },
+        {
+          "dest_offset": "0x0100",
+          "length": 16,
+          "data_hex": "498c828d8e8f90917cb624afb6afb625"
+        },
+        {
+          "dest_offset": "0x0140",
+          "length": 16,
+          "data_hex": "929388899495969729bc2c2dbc2c2d2e"
+        },
+        {
+          "dest_offset": "0x0180",
+          "length": 16,
+          "data_hex": "98999a8f9b9c9d9e3435363735363738"
+        },
+        {
+          "dest_offset": "0x01C0",
+          "length": 16,
+          "data_hex": "9fa0a195a2a3a4a50001404101404142"
+        },
+        {
+          "dest_offset": "0x0200",
+          "length": 16,
+          "data_hex": "47a6a79ca8a9aa02030303030303034b"
+        },
+        {
+          "dest_offset": "0x0240",
+          "length": 16,
+          "data_hex": "54abaca3adae06ecebeb1eebecebeb59"
+        },
+        {
+          "dest_offset": "0x0280",
+          "length": 16,
+          "data_hex": "5eb0b1a9b20607070807070707070807"
+        },
+        {
+          "dest_offset": "0x02C0",
+          "length": 16,
+          "data_hex": "60b3b4b5101f0c0d0c1f0c0d0c0c0c0c"
+        },
+        {
+          "dest_offset": "0x0300",
+          "length": 16,
+          "data_hex": "674768100d0c0c0c0d0c0c0c0c0c0c0d"
+        },
+        {
+          "dest_offset": "0x0340",
+          "length": 16,
+          "data_hex": "6a6b100c0d1f0d0c0c0c0c0c0d0c0c0c"
+        },
+        {
+          "dest_offset": "0x0380",
+          "length": 16,
+          "data_hex": "eaef1113111211111111111111111116"
+        },
+        {
+          "dest_offset": "0x03C0",
+          "length": 16,
+          "data_hex": "efea1111111211111113111111111111"
+        }
+      ]
+    },
+    {
+      "script_index": 34,
+      "bank": "0x81",
+      "data_pc": "0x01BC92",
+      "entries": [
+        {
+          "dest_offset": "0x0057",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x00B7",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0117",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0177",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x01D7",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0237",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0297",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x02F7",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0357",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x03B7",
+          "length": 3,
+          "data_hex": "a5d871"
+        },
+        {
+          "dest_offset": "0x0417",
+          "length": 3,
+          "data_hex": "bce271"
+        },
+        {
+          "dest_offset": "0x0477",
+          "length": 3,
+          "data_hex": "bdc6e3"
+        }
+      ]
+    },
+    {
+      "script_index": 35,
+      "bank": "0x81",
+      "data_pc": "0x01BC92",
+      "entries": [
+        {
+          "dest_offset": "0x0057",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x00B7",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0117",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0177",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x01D7",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0237",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0297",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x02F7",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x0357",
+          "length": 3,
+          "data_hex": "d0d171"
+        },
+        {
+          "dest_offset": "0x03B7",
+          "length": 3,
+          "data_hex": "a5d871"
+        },
+        {
+          "dest_offset": "0x0417",
+          "length": 3,
+          "data_hex": "bce271"
+        },
+        {
+          "dest_offset": "0x0477",
+          "length": 3,
+          "data_hex": "bdc6e3"
+        }
+      ]
+    },
+    {
+      "script_index": 36,
+      "bank": "0x81",
+      "data_pc": "0x01BCE8",
+      "entries": [
+        {
+          "dest_offset": "0x02F2",
+          "length": 4,
+          "data_hex": "f3f1cdc9"
+        },
+        {
+          "dest_offset": "0x0352",
+          "length": 4,
+          "data_hex": "f2f4ddca"
+        },
+        {
+          "dest_offset": "0x03B2",
+          "length": 4,
+          "data_hex": "dbdcdedf"
+        },
+        {
+          "dest_offset": "0x0412",
+          "length": 4,
+          "data_hex": "9fdb99bc"
+        }
+      ]
+    },
+    {
+      "script_index": 37,
+      "bank": "0x81",
+      "data_pc": "0x01BD0A",
+      "entries": [
+        {
+          "dest_offset": "0x000B",
+          "length": 5,
+          "data_hex": "3a4a6b6b6b"
+        },
+        {
+          "dest_offset": "0x004B",
+          "length": 5,
+          "data_hex": "5d3a4a6b6b"
+        },
+        {
+          "dest_offset": "0x008B",
+          "length": 5,
+          "data_hex": "3b4b3a4a6b"
+        },
+        {
+          "dest_offset": "0x00CB",
+          "length": 5,
+          "data_hex": "3b226d3a5a"
+        },
+        {
+          "dest_offset": "0x010B",
+          "length": 5,
+          "data_hex": "3b32336e6a"
+        },
+        {
+          "dest_offset": "0x014B",
+          "length": 5,
+          "data_hex": "3b0404423c"
+        },
+        {
+          "dest_offset": "0x018B",
+          "length": 5,
+          "data_hex": "3b0404424c"
+        },
+        {
+          "dest_offset": "0x01CB",
+          "length": 5,
+          "data_hex": "3b0b0b525c"
+        },
+        {
+          "dest_offset": "0x020B",
+          "length": 5,
+          "data_hex": "1e1d11106c"
+        },
+        {
+          "dest_offset": "0x024B",
+          "length": 5,
+          "data_hex": "212e2d207c"
+        },
+        {
+          "dest_offset": "0x028B",
+          "length": 5,
+          "data_hex": "31303e3d8c"
+        },
+        {
+          "dest_offset": "0x02CB",
+          "length": 5,
+          "data_hex": "4140414e4d"
+        },
+        {
+          "dest_offset": "0x030B",
+          "length": 5,
+          "data_hex": "515051505e"
+        }
+      ]
+    },
+    {
+      "script_index": 38,
+      "bank": "0x81",
+      "data_pc": "0x01BD81",
+      "entries": [
+        {
+          "dest_offset": "0x002B",
+          "length": 5,
+          "data_hex": "3a4a6b6b6b"
+        },
+        {
+          "dest_offset": "0x006B",
+          "length": 5,
+          "data_hex": "5d3a4a6b6b"
+        },
+        {
+          "dest_offset": "0x00AB",
+          "length": 5,
+          "data_hex": "3b4b3a4a6b"
+        },
+        {
+          "dest_offset": "0x00EB",
+          "length": 5,
+          "data_hex": "3b226d3a5a"
+        },
+        {
+          "dest_offset": "0x012B",
+          "length": 5,
+          "data_hex": "3b32336e6a"
+        },
+        {
+          "dest_offset": "0x016B",
+          "length": 5,
+          "data_hex": "3b0404423c"
+        },
+        {
+          "dest_offset": "0x01AB",
+          "length": 5,
+          "data_hex": "3b0404424c"
+        },
+        {
+          "dest_offset": "0x01EB",
+          "length": 5,
+          "data_hex": "3b0b0b525c"
+        },
+        {
+          "dest_offset": "0x022B",
+          "length": 5,
+          "data_hex": "1e1d11106c"
+        },
+        {
+          "dest_offset": "0x026B",
+          "length": 5,
+          "data_hex": "212e2d207c"
+        },
+        {
+          "dest_offset": "0x02AB",
+          "length": 5,
+          "data_hex": "31303e3d8c"
+        },
+        {
+          "dest_offset": "0x02EB",
+          "length": 5,
+          "data_hex": "4140414e4d"
+        },
+        {
+          "dest_offset": "0x032B",
+          "length": 5,
+          "data_hex": "515051505e"
+        }
+      ]
+    },
+    {
+      "script_index": 39,
+      "bank": "0x81",
+      "data_pc": "0x01BDF8",
+      "entries": [
+        {
+          "dest_offset": "0x00B4",
+          "length": 4,
+          "data_hex": "9c7d8ba6"
+        },
+        {
+          "dest_offset": "0x00F4",
+          "length": 4,
+          "data_hex": "9d7d8ba7"
+        },
+        {
+          "dest_offset": "0x0134",
+          "length": 4,
+          "data_hex": "9d7d8ba7"
+        },
+        {
+          "dest_offset": "0x0174",
+          "length": 4,
+          "data_hex": "9d7d8ba7"
+        },
+        {
+          "dest_offset": "0x01B4",
+          "length": 4,
+          "data_hex": "9d7d8ba7"
+        },
+        {
+          "dest_offset": "0x01F4",
+          "length": 4,
+          "data_hex": "9e898aa8"
+        },
+        {
+          "dest_offset": "0x0234",
+          "length": 4,
+          "data_hex": "90949593"
+        }
+      ]
+    },
+    {
+      "script_index": 40,
+      "bank": "0x81",
+      "data_pc": "0x01BE32",
+      "entries": [
+        {
+          "dest_offset": "0x00B4",
+          "length": 4,
+          "data_hex": "7d7d7d8b"
+        },
+        {
+          "dest_offset": "0x00F4",
+          "length": 4,
+          "data_hex": "7d7d7d8b"
+        },
+        {
+          "dest_offset": "0x0134",
+          "length": 4,
+          "data_hex": "7d7d7d8b"
+        },
+        {
+          "dest_offset": "0x0174",
+          "length": 4,
+          "data_hex": "7d7d7d8b"
+        },
+        {
+          "dest_offset": "0x01B4",
+          "length": 4,
+          "data_hex": "7d7d7d8b"
+        },
+        {
+          "dest_offset": "0x01F4",
+          "length": 4,
+          "data_hex": "8989898a"
+        },
+        {
+          "dest_offset": "0x0234",
+          "length": 4,
+          "data_hex": "90919293"
+        }
+      ]
+    },
+    {
+      "script_index": 41,
+      "bank": "0x81",
+      "data_pc": "0x01BE6C",
+      "entries": [
+        {
+          "dest_offset": "0x003B",
+          "length": 5,
+          "data_hex": "555770706b"
+        },
+        {
+          "dest_offset": "0x007B",
+          "length": 5,
+          "data_hex": "5d5557706b"
+        },
+        {
+          "dest_offset": "0x00BB",
+          "length": 5,
+          "data_hex": "3ba955576b"
+        },
+        {
+          "dest_offset": "0x00FB",
+          "length": 5,
+          "data_hex": "3b8e8d555a"
+        },
+        {
+          "dest_offset": "0x013B",
+          "length": 5,
+          "data_hex": "3b8e7d8d6a"
+        },
+        {
+          "dest_offset": "0x017B",
+          "length": 5,
+          "data_hex": "3b8e7d7daf"
+        },
+        {
+          "dest_offset": "0x01BB",
+          "length": 5,
+          "data_hex": "3b8e7d7dbf"
+        },
+        {
+          "dest_offset": "0x01FB",
+          "length": 5,
+          "data_hex": "3b8e7d7dbf"
+        },
+        {
+          "dest_offset": "0x023B",
+          "length": 5,
+          "data_hex": "1eb0c47dbf"
+        },
+        {
+          "dest_offset": "0x027B",
+          "length": 5,
+          "data_hex": "21c0b1b4bf"
+        },
+        {
+          "dest_offset": "0x02BB",
+          "length": 5,
+          "data_hex": "3130c1b2b3"
+        },
+        {
+          "dest_offset": "0x02FB",
+          "length": 5,
+          "data_hex": "414041c2c3"
+        },
+        {
+          "dest_offset": "0x033B",
+          "length": 5,
+          "data_hex": "515051505e"
+        }
+      ]
+    },
+    {
+      "script_index": 42,
+      "bank": "0x81",
+      "data_pc": "0x01BE6C",
+      "entries": [
+        {
+          "dest_offset": "0x003B",
+          "length": 5,
+          "data_hex": "555770706b"
+        },
+        {
+          "dest_offset": "0x007B",
+          "length": 5,
+          "data_hex": "5d5557706b"
+        },
+        {
+          "dest_offset": "0x00BB",
+          "length": 5,
+          "data_hex": "3ba955576b"
+        },
+        {
+          "dest_offset": "0x00FB",
+          "length": 5,
+          "data_hex": "3b8e8d555a"
+        },
+        {
+          "dest_offset": "0x013B",
+          "length": 5,
+          "data_hex": "3b8e7d8d6a"
+        },
+        {
+          "dest_offset": "0x017B",
+          "length": 5,
+          "data_hex": "3b8e7d7daf"
+        },
+        {
+          "dest_offset": "0x01BB",
+          "length": 5,
+          "data_hex": "3b8e7d7dbf"
+        },
+        {
+          "dest_offset": "0x01FB",
+          "length": 5,
+          "data_hex": "3b8e7d7dbf"
+        },
+        {
+          "dest_offset": "0x023B",
+          "length": 5,
+          "data_hex": "1eb0c47dbf"
+        },
+        {
+          "dest_offset": "0x027B",
+          "length": 5,
+          "data_hex": "21c0b1b4bf"
+        },
+        {
+          "dest_offset": "0x02BB",
+          "length": 5,
+          "data_hex": "3130c1b2b3"
+        },
+        {
+          "dest_offset": "0x02FB",
+          "length": 5,
+          "data_hex": "414041c2c3"
+        },
+        {
+          "dest_offset": "0x033B",
+          "length": 5,
+          "data_hex": "515051505e"
+        }
+      ]
+    },
+    {
+      "script_index": 43,
+      "bank": "0x81",
+      "data_pc": "0x01BEE3",
+      "entries": [
+        {
+          "dest_offset": "0x0298",
+          "length": 3,
+          "data_hex": "7d6a6a"
+        },
+        {
+          "dest_offset": "0x02F8",
+          "length": 3,
+          "data_hex": "967e6a"
+        },
+        {
+          "dest_offset": "0x0358",
+          "length": 3,
+          "data_hex": "96977e"
+        },
+        {
+          "dest_offset": "0x03B8",
+          "length": 3,
+          "data_hex": "969797"
+        },
+        {
+          "dest_offset": "0x0418",
+          "length": 3,
+          "data_hex": "969797"
+        },
+        {
+          "dest_offset": "0x0478",
+          "length": 3,
+          "data_hex": "969797"
+        },
+        {
+          "dest_offset": "0x04D8",
+          "length": 3,
+          "data_hex": "989797"
+        },
+        {
+          "dest_offset": "0x0538",
+          "length": 3,
+          "data_hex": "9a9997"
+        },
+        {
+          "dest_offset": "0x0598",
+          "length": 3,
+          "data_hex": "bd8a99"
+        },
+        {
+          "dest_offset": "0x05F8",
+          "length": 3,
+          "data_hex": "02bd6d"
+        }
+      ]
+    },
+    {
+      "script_index": 44,
+      "bank": "0x81",
+      "data_pc": "0x01BF2B",
+      "entries": [
+        {
+          "dest_offset": "0x01AB",
+          "length": 4,
+          "data_hex": "9697eced"
+        },
+        {
+          "dest_offset": "0x020B",
+          "length": 4,
+          "data_hex": "9e9feced"
+        },
+        {
+          "dest_offset": "0x026B",
+          "length": 4,
+          "data_hex": "9ea7eced"
+        },
+        {
+          "dest_offset": "0x02CB",
+          "length": 4,
+          "data_hex": "9ea7eced"
+        },
+        {
+          "dest_offset": "0x032B",
+          "length": 4,
+          "data_hex": "bdbeeced"
+        },
+        {
+          "dest_offset": "0x038B",
+          "length": 4,
+          "data_hex": "c5c6eced"
+        },
+        {
+          "dest_offset": "0x03EA",
+          "length": 5,
+          "data_hex": "5acbcc6566"
+        },
+        {
+          "dest_offset": "0x044A",
+          "length": 5,
+          "data_hex": "6060d46566"
+        },
+        {
+          "dest_offset": "0x04AA",
+          "length": 5,
+          "data_hex": "61e4e481ed"
+        }
+      ]
+    },
+    {
+      "script_index": 45,
+      "bank": "0x81",
+      "data_pc": "0x01BF78",
+      "entries": [
+        {
+          "dest_offset": "0x01CC",
+          "length": 4,
+          "data_hex": "9697eced"
+        },
+        {
+          "dest_offset": "0x022C",
+          "length": 4,
+          "data_hex": "9e9feced"
+        },
+        {
+          "dest_offset": "0x028C",
+          "length": 4,
+          "data_hex": "9ea7eced"
+        },
+        {
+          "dest_offset": "0x02EC",
+          "length": 4,
+          "data_hex": "9ea7eced"
+        },
+        {
+          "dest_offset": "0x034C",
+          "length": 4,
+          "data_hex": "bdbeeced"
+        },
+        {
+          "dest_offset": "0x03AC",
+          "length": 4,
+          "data_hex": "c5c6eced"
+        },
+        {
+          "dest_offset": "0x040B",
+          "length": 5,
+          "data_hex": "5acbcc6566"
+        },
+        {
+          "dest_offset": "0x046B",
+          "length": 5,
+          "data_hex": "6060d46566"
+        },
+        {
+          "dest_offset": "0x04CB",
+          "length": 5,
+          "data_hex": "61616181ed"
+        }
+      ]
+    },
+    {
+      "script_index": 46,
+      "bank": "0x81",
+      "data_pc": "0x01BFC5",
+      "entries": [
+        {
+          "dest_offset": "0x0345",
+          "length": 5,
+          "data_hex": "e5e6e5e60c"
+        },
+        {
+          "dest_offset": "0x03A5",
+          "length": 5,
+          "data_hex": "e7e7e7e7e7"
+        },
+        {
+          "dest_offset": "0x0405",
+          "length": 5,
+          "data_hex": "e8e8e8e8e8"
+        },
+        {
+          "dest_offset": "0x0465",
+          "length": 5,
+          "data_hex": "e9e9e9e9e9"
+        },
+        {
+          "dest_offset": "0x04C5",
+          "length": 5,
+          "data_hex": "eaeaeaeaea"
+        },
+        {
+          "dest_offset": "0x0525",
+          "length": 5,
+          "data_hex": "ebebebebeb"
+        },
+        {
+          "dest_offset": "0x0585",
+          "length": 5,
+          "data_hex": "ebebebebeb"
+        }
+      ]
+    },
+    {
+      "script_index": 47,
+      "bank": "0x81",
+      "data_pc": "0x01C0E9",
+      "entries": [
+        {
+          "dest_offset": "0x0345",
+          "length": 5,
+          "data_hex": "b9bab9ba0c"
+        },
+        {
+          "dest_offset": "0x03A5",
+          "length": 5,
+          "data_hex": "c4c4c4c4c4"
+        },
+        {
+          "dest_offset": "0x0405",
+          "length": 5,
+          "data_hex": "5a5a5a5a5a"
+        },
+        {
+          "dest_offset": "0x0465",
+          "length": 5,
+          "data_hex": "6060606060"
+        },
+        {
+          "dest_offset": "0x04C5",
+          "length": 5,
+          "data_hex": "6161616161"
+        },
+        {
+          "dest_offset": "0x0525",
+          "length": 5,
+          "data_hex": "6262626262"
+        },
+        {
+          "dest_offset": "0x0585",
+          "length": 5,
+          "data_hex": "6262626262"
+        }
+      ]
+    },
+    {
+      "script_index": 48,
+      "bank": "0x81",
+      "data_pc": "0x01C008",
+      "entries": [
+        {
+          "dest_offset": "0x0449",
+          "length": 5,
+          "data_hex": "494a4a4b8b"
+        },
+        {
+          "dest_offset": "0x04A9",
+          "length": 5,
+          "data_hex": "8b503a3a3b"
+        }
+      ]
+    },
+    {
+      "script_index": 49,
+      "bank": "0x81",
+      "data_pc": "0x01C01C",
+      "entries": [
+        {
+          "dest_offset": "0x0477",
+          "length": 5,
+          "data_hex": "3c97983f8b"
+        },
+        {
+          "dest_offset": "0x04D7",
+          "length": 5,
+          "data_hex": "8b4c999a4f"
+        }
+      ]
+    },
+    {
+      "script_index": 50,
+      "bank": "0x81",
+      "data_pc": "0x01C030",
+      "entries": [
+        {
+          "dest_offset": "0x0465",
+          "length": 11,
+          "data_hex": "6765a9a9a9a9afb5892304"
+        },
+        {
+          "dest_offset": "0x04C5",
+          "length": 11,
+          "data_hex": "d8bebfa9a9a9b3afb58923"
+        },
+        {
+          "dest_offset": "0x0525",
+          "length": 11,
+          "data_hex": "a6a7a7a5a9a9b4b3afb589"
+        }
+      ]
+    },
+    {
+      "script_index": 51,
+      "bank": "0x81",
+      "data_pc": "0x01C05F",
+      "entries": [
+        {
+          "dest_offset": "0x0362",
+          "length": 13,
+          "data_hex": "94212021202120212021202120"
+        },
+        {
+          "dest_offset": "0x03C2",
+          "length": 13,
+          "data_hex": "30313031303130953031303130"
+        },
+        {
+          "dest_offset": "0x0422",
+          "length": 13,
+          "data_hex": "40414041404140414041404196"
+        },
+        {
+          "dest_offset": "0x0482",
+          "length": 13,
+          "data_hex": "50515097505150515051505150"
+        },
+        {
+          "dest_offset": "0x0382",
+          "length": 13,
+          "data_hex": "94212021202120212021202120"
+        },
+        {
+          "dest_offset": "0x03E2",
+          "length": 13,
+          "data_hex": "30313031303130953031303130"
+        },
+        {
+          "dest_offset": "0x0442",
+          "length": 13,
+          "data_hex": "40414041404140414041404196"
+        },
+        {
+          "dest_offset": "0x04A2",
+          "length": 13,
+          "data_hex": "50515097505150515051505150"
+        }
+      ]
+    },
+    {
+      "script_index": 52,
+      "bank": "0x81",
+      "data_pc": "0x01C006",
+      "entries": []
+    },
+    {
+      "script_index": 53,
+      "bank": "0x81",
+      "data_pc": "0x01C12A",
+      "entries": [
+        {
+          "dest_offset": "0x000D",
+          "length": 7,
+          "data_hex": "ef6deeeeeef5f6"
+        },
+        {
+          "dest_offset": "0x004D",
+          "length": 7,
+          "data_hex": "f3f4eeeeeef1f6"
+        },
+        {
+          "dest_offset": "0x008D",
+          "length": 7,
+          "data_hex": "ef3ceeeeeef9fa"
+        },
+        {
+          "dest_offset": "0x00CD",
+          "length": 7,
+          "data_hex": "f7f4eeeeeef5f6"
+        },
+        {
+          "dest_offset": "0x010D",
+          "length": 7,
+          "data_hex": "fbfc51fdfeff5b"
+        }
+      ]
+    },
+    {
+      "script_index": 54,
+      "bank": "0x81",
+      "data_pc": "0x01C163",
+      "entries": [
+        {
+          "dest_offset": "0x0028",
+          "length": 7,
+          "data_hex": "ef6deeeeeef5f6"
+        },
+        {
+          "dest_offset": "0x0068",
+          "length": 7,
+          "data_hex": "f3f4eeeeeef1f6"
+        },
+        {
+          "dest_offset": "0x00A8",
+          "length": 7,
+          "data_hex": "ef3ceeeeeef9fa"
+        },
+        {
+          "dest_offset": "0x00E8",
+          "length": 7,
+          "data_hex": "f7f4eeeeeef5f6"
+        },
+        {
+          "dest_offset": "0x0128",
+          "length": 7,
+          "data_hex": "fbfc51fdfeff5b"
+        }
+      ]
+    },
+    {
+      "script_index": 55,
+      "bank": "0x81",
+      "data_pc": "0x01C19C",
+      "entries": [
+        {
+          "dest_offset": "0x0062",
+          "length": 4,
+          "data_hex": "0e0f0f10"
+        },
+        {
+          "dest_offset": "0x00A2",
+          "length": 4,
+          "data_hex": "a3eeeea4"
+        },
+        {
+          "dest_offset": "0x00E2",
+          "length": 4,
+          "data_hex": "a5eeeea6"
+        },
+        {
+          "dest_offset": "0x0122",
+          "length": 4,
+          "data_hex": "a3eeeea4"
+        },
+        {
+          "dest_offset": "0x0162",
+          "length": 4,
+          "data_hex": "a5eeeea6"
+        },
+        {
+          "dest_offset": "0x01A2",
+          "length": 4,
+          "data_hex": "c7eeeef0"
+        },
+        {
+          "dest_offset": "0x01E2",
+          "length": 4,
+          "data_hex": "f2f8f82a"
+        }
+      ]
+    },
+    {
+      "script_index": 56,
+      "bank": "0x81",
+      "data_pc": "0x01C1D6",
+      "entries": []
+    },
+    {
+      "script_index": 57,
+      "bank": "0x81",
+      "data_pc": "0x01C1D6",
+      "entries": []
+    },
+    {
+      "script_index": 58,
+      "bank": "0x81",
+      "data_pc": "0x01C1D6",
+      "entries": []
+    },
+    {
+      "script_index": 59,
+      "bank": "0x81",
+      "data_pc": "0x01C23A",
+      "entries": [
+        {
+          "dest_offset": "0x013B",
+          "length": 4,
+          "data_hex": "42464745"
+        },
+        {
+          "dest_offset": "0x017B",
+          "length": 4,
+          "data_hex": "4248494a"
+        },
+        {
+          "dest_offset": "0x01BB",
+          "length": 4,
+          "data_hex": "4254554c"
+        },
+        {
+          "dest_offset": "0x01FB",
+          "length": 4,
+          "data_hex": "42565758"
+        },
+        {
+          "dest_offset": "0x023B",
+          "length": 4,
+          "data_hex": "3b595a5b"
+        },
+        {
+          "dest_offset": "0x027B",
+          "length": 4,
+          "data_hex": "535c5d5e"
+        },
+        {
+          "dest_offset": "0x02BB",
+          "length": 4,
+          "data_hex": "d9535f60"
+        },
+        {
+          "dest_offset": "0x02FB",
+          "length": 4,
+          "data_hex": "85d95352"
+        }
+      ]
+    },
+    {
+      "script_index": 60,
+      "bank": "0x81",
+      "data_pc": "0x01C27C",
+      "entries": [
+        {
+          "dest_offset": "0x013B",
+          "length": 4,
+          "data_hex": "42624745"
+        },
+        {
+          "dest_offset": "0x017B",
+          "length": 4,
+          "data_hex": "4263644a"
+        },
+        {
+          "dest_offset": "0x01BB",
+          "length": 4,
+          "data_hex": "42636566"
+        },
+        {
+          "dest_offset": "0x01FB",
+          "length": 4,
+          "data_hex": "42636768"
+        },
+        {
+          "dest_offset": "0x023B",
+          "length": 4,
+          "data_hex": "3b63696a"
+        },
+        {
+          "dest_offset": "0x027B",
+          "length": 4,
+          "data_hex": "536b6c6d"
+        },
+        {
+          "dest_offset": "0x02BB",
+          "length": 4,
+          "data_hex": "da536e6f"
+        },
+        {
+          "dest_offset": "0x02FB",
+          "length": 4,
+          "data_hex": "85da5370"
+        }
+      ]
+    },
+    {
+      "script_index": 61,
+      "bank": "0x81",
+      "data_pc": "0x01C1D6",
+      "entries": []
+    },
+    {
+      "script_index": 62,
+      "bank": "0x81",
+      "data_pc": "0x01C1D8",
+      "entries": [
+        {
+          "dest_offset": "0x0000",
+          "length": 4,
+          "data_hex": "64638887"
+        },
+        {
+          "dest_offset": "0x0040",
+          "length": 4,
+          "data_hex": "63648788"
+        },
+        {
+          "dest_offset": "0x0080",
+          "length": 4,
+          "data_hex": "c5638887"
+        },
+        {
+          "dest_offset": "0x00C0",
+          "length": 4,
+          "data_hex": "63c587c7"
+        },
+        {
+          "dest_offset": "0x0100",
+          "length": 4,
+          "data_hex": "70718887"
+        },
+        {
+          "dest_offset": "0x0140",
+          "length": 4,
+          "data_hex": "72738788"
+        },
+        {
+          "dest_offset": "0x0180",
+          "length": 4,
+          "data_hex": "7475c787"
+        },
+        {
+          "dest_offset": "0x01C0",
+          "length": 4,
+          "data_hex": "72758788"
+        },
+        {
+          "dest_offset": "0x0200",
+          "length": 4,
+          "data_hex": "74758887"
+        },
+        {
+          "dest_offset": "0x0240",
+          "length": 4,
+          "data_hex": "7677c8c7"
+        },
+        {
+          "dest_offset": "0x0280",
+          "length": 4,
+          "data_hex": "7879b4b3"
+        },
+        {
+          "dest_offset": "0x02C0",
+          "length": 4,
+          "data_hex": "0b7a8588"
+        }
+      ]
+    },
+    {
+      "script_index": 63,
+      "bank": "0x81",
+      "data_pc": "0x01C1D6",
+      "entries": []
+    }
+  ]
+}
