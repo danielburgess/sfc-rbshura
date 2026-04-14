@@ -12,15 +12,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 # ---------------------------------------------------------------------------
-# LZSS parameters (from DecompressData at PC 0x05409)
-# ---------------------------------------------------------------------------
-_LZSS_WINDOW    = 4096        # 12-bit ring buffer
-_LZSS_WIN_INIT  = 0x0FEE      # initial window position
-_LZSS_MIN_MATCH = 3
-_LZSS_MAX_MATCH = 18          # 4-bit length field + 3 = 3..18
-
-
-# ---------------------------------------------------------------------------
 # HiROM address conversion
 # ---------------------------------------------------------------------------
 
@@ -90,56 +81,21 @@ def read_at_snes(rom: bytes, snes_addr: int, count: int) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# LZSS decompression
+# LZSS decompression — delegates to retrotool.compression (PARAMS_RBSHURA)
 # ---------------------------------------------------------------------------
+from retrotool.compression import LZSSCodec, PARAMS_RBSHURA
+
+_LZSS_CODEC = LZSSCodec(PARAMS_RBSHURA)
+
 
 def lzss_decompress(data: bytes, start: int = 0) -> bytes:
     """Decompress a raw LZSS stream (no size header).
 
-    Reads until the input is exhausted. Use `lzss_decompress_block` if the
-    data is prefixed with the 2-byte compressed-size header.
+    Wraps the decompressor around a synthetic 2-byte size header so callers
+    that hand in pre-sliced streams still work.
     """
-    window      = bytearray(_LZSS_WINDOW)
-    window_pos  = _LZSS_WIN_INIT
-    out         = bytearray()
-    pos         = start
-    length      = len(data)
-
-    while pos < length:
-        flags = data[pos]
-        pos  += 1
-        if pos >= length:
-            break
-
-        for _ in range(8):
-            if flags & 1:
-                # Literal byte
-                if pos >= length:
-                    break
-                lit = data[pos]
-                pos += 1
-                out.append(lit)
-                window[window_pos] = lit
-                window_pos = (window_pos + 1) & 0x0FFF
-                if pos >= length:
-                    break
-            else:
-                # Back-reference
-                if pos + 1 >= length:
-                    break
-                b0 = data[pos];     pos += 1
-                b1 = data[pos];     pos += 1
-                match_len = (b1 & 0x0F) + _LZSS_MIN_MATCH
-                match_off = (((b1 & 0xF0) << 4) | b0) & 0x0FFF
-                for _ in range(match_len):
-                    byte = window[match_off]
-                    out.append(byte)
-                    window[window_pos] = byte
-                    window_pos = (window_pos + 1) & 0x0FFF
-                    match_off  = (match_off  + 1) & 0x0FFF
-            flags >>= 1
-
-    return bytes(out)
+    framed = len(data[start:]).to_bytes(2, "little") + data[start:]
+    return _LZSS_CODEC.decompress(framed, 0).data
 
 
 def lzss_decompress_block(rom: bytes, pc: int) -> tuple[bytes, int]:
@@ -147,119 +103,24 @@ def lzss_decompress_block(rom: bytes, pc: int) -> tuple[bytes, int]:
 
     Returns (decompressed_bytes, pc_after_block).
     """
-    comp_size = read_u16_le(rom, pc)
-    start     = pc + 2
-    compressed = rom[start : start + comp_size]
-    decompressed = lzss_decompress(compressed)
-    return decompressed, start + comp_size
+    r = _LZSS_CODEC.decompress(rom, pc)
+    return r.data, pc + r.consumed
 
 
 # ---------------------------------------------------------------------------
-# LZSS compression
+# LZSS compression — delegates to retrotool.compression
 # ---------------------------------------------------------------------------
-
-def _update_window(window, pos_dict, window_pos, byte):
-    mod = _LZSS_WINDOW
-    # Remove stale 3-tuples touching window_pos
-    for s in ((window_pos - 2) % mod, (window_pos - 1) % mod, window_pos):
-        key = (window[s], window[(s + 1) % mod], window[(s + 2) % mod])
-        if key in pos_dict:
-            try:
-                pos_dict[key].remove(s)
-            except ValueError:
-                pass
-            if not pos_dict[key]:
-                del pos_dict[key]
-    window[window_pos] = byte
-    # Add new 3-tuples
-    for s in ((window_pos - 2) % mod, (window_pos - 1) % mod, window_pos):
-        key = (window[s], window[(s + 1) % mod], window[(s + 2) % mod])
-        pos_dict.setdefault(key, []).append(s)
-
 
 def lzss_compress(data: bytes) -> bytes:
-    """Compress `data` using the same LZSS variant as the game.
-
-    Returns the raw compressed stream (no size header).
-    """
-    n           = len(data)
-    window      = bytearray(_LZSS_WINDOW)
-    window_pos  = _LZSS_WIN_INIT
-    pos_dict: dict = {}
-
-    # Pre-fill dictionary with the initial (all-zero) window
-    for s in range(_LZSS_WINDOW):
-        key = (window[s], window[(s + 1) % _LZSS_WINDOW], window[(s + 2) % _LZSS_WINDOW])
-        pos_dict.setdefault(key, []).append(s)
-
-    out      = bytearray()
-    inp      = 0
-
-    while inp < n:
-        flags = 0
-        ops   = []
-
-        for bit in range(8):
-            if inp >= n:
-                break
-
-            remaining = n - inp
-            if remaining < _LZSS_MIN_MATCH:
-                lit = data[inp]
-                ops.append(("lit", lit))
-                flags |= (1 << bit)
-                _update_window(window, pos_dict, window_pos, lit)
-                window_pos = (window_pos + 1) & 0x0FFF
-                inp += 1
-                continue
-
-            # Find best match
-            key       = (data[inp], data[inp + 1], data[inp + 2])
-            best_len  = _LZSS_MIN_MATCH - 1
-            best_off  = -1
-            for cand in pos_dict.get(key, []):
-                mlen = _LZSS_MIN_MATCH
-                while (mlen < _LZSS_MAX_MATCH
-                       and inp + mlen < n
-                       and data[inp + mlen] == window[(cand + mlen) & 0x0FFF]):
-                    mlen += 1
-                if mlen > best_len:
-                    best_len = mlen
-                    best_off = cand
-
-            if best_off >= 0:
-                ops.append(("ref", best_off, best_len))
-                for j in range(best_len):
-                    byte = window[(best_off + j) & 0x0FFF]
-                    _update_window(window, pos_dict, window_pos, byte)
-                    window_pos = (window_pos + 1) & 0x0FFF
-                inp += best_len
-            else:
-                lit = data[inp]
-                ops.append(("lit", lit))
-                flags |= (1 << bit)
-                _update_window(window, pos_dict, window_pos, lit)
-                window_pos = (window_pos + 1) & 0x0FFF
-                inp += 1
-
-        out.append(flags)
-        for op in ops:
-            if op[0] == "lit":
-                out.append(op[1])
-            else:
-                _, off, length = op
-                b0 = off & 0xFF
-                b1 = ((off >> 8) << 4) | (length - _LZSS_MIN_MATCH)
-                out.append(b0)
-                out.append(b1)
-
-    return bytes(out)
+    """Compress `data`. Returns the raw compressed stream (no size header)."""
+    r = _LZSS_CODEC.compress(data)
+    # LZSSCodec emits the 2-byte header per PARAMS_RBSHURA; strip it.
+    return r.data[2:]
 
 
 def lzss_compress_block(data: bytes) -> bytes:
     """Compress and prepend the 2-byte little-endian compressed-size header."""
-    compressed = lzss_compress(data)
-    return struct.pack("<H", len(compressed)) + compressed
+    return _LZSS_CODEC.compress(data).data
 
 
 # ---------------------------------------------------------------------------
