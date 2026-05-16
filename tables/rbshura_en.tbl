@@ -1,0 +1,83 @@
+; Rushing Beat Shura — ENGLISH encoding table (PK font padded for
+; rbshura's TL/TR/BL/BR 16x16 renderer).
+;
+; Each PK 8x16 glyph occupies the LEFT half of its 16x16 rbshura slot
+; (TL = PK top tile, BL = PK bottom tile, TR/BR blank).
+
+@ctrl_prefix F7 F8 F9 FB FC FD FE FF
+@ctrl F7=2
+@ctrl F8=2
+@ctrl F9=2
+@ctrl FB=2
+@ctrl FC=3
+@ctrl FC.02=4
+@ctrl FD=1
+@ctrl FE=1
+@ctrl FF=1
+
+; --- Latin character set (from Peacekeepers font) ---
+00= 
+01=a
+02=b
+03=c
+04=d
+05=e
+06=f
+07=g
+08=h
+09=i
+0A=j
+0B=k
+0C=l
+0D=m
+0E=n
+0F=o
+10=p
+11=q
+12=r
+13=s
+14=t
+15=u
+16=v
+17=w
+18=x
+19=y
+1A=z
+20=0
+21=1
+22=2
+23=3
+24=4
+25=5
+26=6
+27=7
+28=8
+29=9
+30=A
+31=B
+32=C
+33=D
+34=E
+35=F
+36=G
+37=H
+38=I
+39=J
+3A=K
+3B=L
+3C=M
+3D=N
+3E=O
+3F=P
+40=Q
+41=R
+42=S
+43=T
+44=U
+45=V
+46=W
+47=X
+48=Y
+49=Z
+
+**=[**]

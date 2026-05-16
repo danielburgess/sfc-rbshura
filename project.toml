@@ -1,0 +1,15 @@
+# Top-level scalars MUST come before any [section] header in TOML.
+data_dirs = ["tables"]
+jp_data_dir = "data/jp"
+en_data_dir = "data/en"
+
+[rom]
+name = "rbshura"
+file = "rbshura.sfc"
+mapping = "hirom"
+size = "2M"
+
+[rom.build]
+
+[extract]
+default_lang = "jp"

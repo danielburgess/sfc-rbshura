@@ -1,0 +1,27 @@
+[table]
+name = "scenario_24"
+type = "pointer"
+
+[encoding]
+table_file = "tables/rbshura.tbl"
+terminator = 0xFF
+
+[pointers]
+# 16-bit LE pointers in HiROM bank $85 (101 entries).
+offset = "$85D073"
+count = 101
+size = 2
+
+[data]
+# Bank $85 upper-half ROM region. Permissive bounds — scenarios
+# share strings within a bank; tighten when build-side ownership matters.
+offset = "$858000"
+end = "$860000"
+
+[section]
+kind = "script"
+[section.placement]
+mode = "overflow"
+[section.overflow]
+slot-measure = "source-entry"
+splitter = "ctrl-aware"

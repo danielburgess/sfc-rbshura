@@ -1,0 +1,30 @@
+[table]
+name = "scenario_00"
+type = "pointer"
+
+[encoding]
+table_file = "tables/rbshura.tbl"
+terminator = 0xFF
+
+[pointers]
+# Scenario 0 string-pointer table. 16-bit LE pointers, 59 entries.
+# Pointer table address is SNES $85:86E4 (HiROM) = PC $0586E4.
+offset = "$8586E4"
+count = 59
+size = 2
+
+[data]
+# Strings live in HiROM bank $85's upper half ($8000-$FFFF). Permissive
+# bounds for now; scenarios share strings across the bank so a single
+# scenario's data region overlaps neighbors. Tighten when we move to
+# build (insertion) where ownership matters.
+offset = "$858000"
+end = "$860000"
+
+[section]
+kind = "script"
+[section.placement]
+mode = "overflow"
+[section.overflow]
+slot-measure = "source-entry"
+splitter = "ctrl-aware"
