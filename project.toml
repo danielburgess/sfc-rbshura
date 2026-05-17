@@ -5,11 +5,28 @@ en_data_dir = "data/en"
 
 [rom]
 name = "rbshura"
-file = "rbshura.sfc"
+# Source ROM for build. Currently set to the font-patched ROM so the build
+# output has PK Latin font + EN scripts in one pass. For pure JP extract,
+# temporarily switch back to "rbshura.sfc".
+file = "rbshura_pkfont.sfc"
 mapping = "hirom"
 size = "2M"
 
 [rom.build]
+# Freespace for overflow-mode script allocation. Ordered roughly largest-first
+# so the bump allocator finds bigger contiguous blocks early. Drawn from
+# rbshura's actual zero-fill runs (>=128B) — see project_bank_freespace.md.
+# ~25 KB total available, ~4× the ~6.5 KB EN scripts need.
+freespace = [
+    ["$1A9CF3", "$1AC003"],   # bank $1A: 8977 B (largest single run)
+    ["$086FFE", "$088000"],   # bank $08: 4098 B
+    ["$1AF2F3", "$1B0001"],   # bank $1A: 3343 B
+    ["$0C97FE", "$0CA000"],   # bank $0C: 2050 B
+    ["$023800", "$024000"],   # bank $02: 2048 B
+    ["$1BF878", "$1C0006"],   # bank $1B: 1935 B
+    ["$0CB9FD", "$0CC000"],   # bank $0C: 1539 B
+    ["$0975DA", "$097A1B"],   # bank $09: 1089 B
+]
 
 [extract]
 default_lang = "jp"

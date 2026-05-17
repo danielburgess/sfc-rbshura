@@ -3,7 +3,7 @@ name = "scenario_06"
 type = "pointer"
 
 [encoding]
-table_file = "tables/rbshura.tbl"
+table_file = "tables/rbshura_en.tbl"
 terminator = 0xFF
 
 [pointers]
@@ -15,13 +15,10 @@ size = 2
 [data]
 # Bank $85 upper-half ROM region. Permissive bounds — scenarios
 # share strings within a bank; tighten when build-side ownership matters.
-offset = "$858000"
-end = "$860000"
+offset = "$85A0F9"
+end = "$85A58B"
 
 [section]
 kind = "script"
 [section.placement]
-mode = "overflow"
-[section.overflow]
-slot-measure = "source-entry"
-splitter = "ctrl-aware"
+mode = "relocate"

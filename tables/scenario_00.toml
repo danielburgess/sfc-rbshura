@@ -3,7 +3,7 @@ name = "scenario_00"
 type = "pointer"
 
 [encoding]
-table_file = "tables/rbshura.tbl"
+table_file = "tables/rbshura_en.tbl"
 terminator = 0xFF
 
 [pointers]
@@ -18,13 +18,10 @@ size = 2
 # bounds for now; scenarios share strings across the bank so a single
 # scenario's data region overlaps neighbors. Tighten when we move to
 # build (insertion) where ownership matters.
-offset = "$858000"
-end = "$860000"
+offset = "$85875A"
+end = "$858E6B"
 
 [section]
 kind = "script"
 [section.placement]
-mode = "overflow"
-[section.overflow]
-slot-measure = "source-entry"
-splitter = "ctrl-aware"
+mode = "relocate"

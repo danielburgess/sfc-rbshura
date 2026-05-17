@@ -73,11 +73,54 @@ JP_FONT_BYTES = N_GLYPHS * JP_CHAR_BYTES  # 5120 bytes written into rbshura
 
 
 LATIN_MAP: dict[int, str] = {
+    # Verified end-to-end via emulator probes (2026-05-16):
     0x00: ' ',
-    **{0x01 + i: chr(ord('a') + i) for i in range(26)},  # 01-1A = a-z
-    **{0x20 + i: chr(ord('0') + i) for i in range(10)},  # 20-29 = 0-9 (tentative)
-    **{0x30 + i: chr(ord('A') + i) for i in range(26)},  # 30-49 = A-Z (tentative)
+    # Lowercase a-z (verified by "hello world" probe)
+    **{0x01 + i: chr(ord('a') + i) for i in range(26)},
+    # Pre-uppercase punctuation block (verified by probe4):
+    0x1B: '.', 0x1C: '"', 0x1D: ',', 0x1E: '-', 0x1F: "'",
+    0x20: '!',
+    # Uppercase A-Z (verified by uppercase probe, derived from $30=P observation):
+    **{0x21 + i: chr(ord('A') + i) for i in range(26)},
+    0x3B: '?',
+    # Post-? punctuation block (verified by probe3):
+    0x3C: '(', 0x3D: ')', 0x3E: '/',
+    # 0x3F: blank slot in PK font
+    # Digits 0-9 (verified by probe1/2 + probe3 anchors):
+    **{0x40 + i: chr(ord('0') + i) for i in range(10)},
+    0x4A: ';',
+    # 0x4B-0x4D: blank slots in PK font
 }
+
+# Multi-target aliases: chars without their own glyph that piggyback on an
+# existing slot (visually displays as the alias target). User-specified
+# (2026-05-16): `[` and `]` → `"` slot ($1C); em-dash → hyphen slot ($1E);
+# ellipsis → three periods (multi-byte sequence $1B$1B$1B).
+ALIASES: list[tuple[str, bytes]] = [
+    ('[', bytes([0x1C])),
+    (']', bytes([0x1C])),
+    ('—', bytes([0x1E])),
+    ('…', bytes([0x1B, 0x1B, 0x1B])),
+]
+
+
+def _unmapped_chars_in_en_scripts() -> list[str]:
+    """Scan data/en/*.txt for any char that's neither in LATIN_MAP, in ALIASES,
+    nor whitespace/bracket-syntax. These all get mapped to $00 (space) so the
+    encoder never fails on the EN data. User-directive (2026-05-16):
+    "anything else, just set to 00 (space)".
+    """
+    import re
+    mapped = set(LATIN_MAP.values()) | {ch for ch, _ in ALIASES} | {' ', '\n', '\t', '\r'}
+    found: dict[str, None] = {}
+    for f in sorted((ROOT / "data" / "en").glob("scenario_*.txt")):
+        body = f.read_text(encoding="utf-16")
+        body = re.sub(r"<<\$\d+:\d+\[\$\d+\]>>", "", body)
+        body = re.sub(r"\[[0-9A-Fa-f]{2}\]", "", body)
+        for ch in body:
+            if ch not in mapped:
+                found[ch] = None
+    return list(found.keys())
 
 
 def patch_font(jp_rom: bytes, pk_rom: bytes) -> bytes:
@@ -130,8 +173,19 @@ def write_en_table(path: Path) -> None:
     for byte_val, ch in sorted(LATIN_MAP.items()):
         lines.append(f"{byte_val:02X}={ch}")
     lines.append("")
+    lines.append("; --- Aliases (chars without dedicated glyphs piggyback on existing slots) ---")
+    for ch, byte_seq in ALIASES:
+        hex_str = ''.join(f"{b:02X}" for b in byte_seq)
+        lines.append(f"{hex_str}={ch}")
+    lines.append("")
+    lines.append("; --- Unmapped script chars → $00 (space) per user directive 2026-05-16 ---")
+    unmapped = _unmapped_chars_in_en_scripts()
+    for ch in unmapped:
+        lines.append(f"00={ch}")
+    lines.append("")
     lines.append("**=[**]")
     path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"  → table has {len(LATIN_MAP)} primary + {len(ALIASES)} aliases + {len(unmapped)} unmapped→space")
 
 
 def inspect() -> None:
