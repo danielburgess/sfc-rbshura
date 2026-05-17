@@ -1,8 +1,5 @@
-; Rushing Beat Shura — ENGLISH encoding table (PK font padded for
-; rbshura's TL/TR/BL/BR 16x16 renderer).
-;
-; Each PK 8x16 glyph occupies the LEFT half of its 16x16 rbshura slot
-; (TL = PK top tile, BL = PK bottom tile, TR/BR blank).
+; Rushing Beat Shura — ENGLISH encoding table (PK font 8x16 with the
+; tight-8 renderer patch at $05839F — chars occupy a single tile column).
 
 @ctrl_prefix F7 F8 F9 FB FC FD FE FF
 @ctrl F7=2

@@ -1,58 +1,37 @@
 #!/usr/bin/env python3
-"""Apply Peacekeepers' Latin font to rbshura — CORRECTED PADDING APPROACH.
+"""Apply Peacekeepers' Latin font to rbshura — TIGHT 8-px-per-char renderer.
 
-Architecture discovery (2026-05-16):
-  The buffer at $0E22-$0E31 is NOT OAM sprite data — it's a VRAM DMA upload
-  queue. The consumer at $009BC2 reads each entry and:
-    - $0E22 → $2115 (VMAIN: VRAM increment mode)
-    - $0E23 → $4302 (DMA source address low)
-    - $0E25 → $4304 (DMA source bank)
-    - $0E26 → $4305 (DMA byte count)
-    - $0E28 → $2116 (VRAM destination word address)
-    - $420B trigger
+OPTION B (true PK-style renderer):
+  Patches rbshura's renderer at PC $05839F so that each char takes a SINGLE
+  tile column (1 tile top, 1 tile bottom = 8x16 effective glyph) instead of
+  the original 2x2 layout (16x16). Lower stride means 32 chars per line at
+  the original tilemap geometry.
 
-  rbshura's original renderer queues ONE 64-byte DMA per char that uploads
-  4 consecutive 16-byte tiles to consecutive VRAM slots. The tilemap-write
-  tail then references those 4 tile slots in a 2x2 arrangement
-  (TL=A, TR=A+1, BL=A+2, BR=A+3), rendering a 16x16 char.
+Three architectural changes vs vanilla rbshura (preserve byte count via NOPs):
+  1. DMA byte count: $40 (64B = 4 tiles) → $20 (32B = 2 tiles).
+     One-byte literal change at $0583D8.
+  2. Tilemap tail: 4 entries (TL/TR/BL/BR) → 2 entries (TL/BL).
+     5B NOP at $058403-$058407 kills `STA $001542,X` + the extra `INC A`
+     that was bumping the tile# for the BL entry (BL now needs tile+1 from
+     INC A at $058402, not tile+2).
+     5B NOP at $05840C-$058410 kills `INC A` + `STA $001582,X`.
+  3. Column / tile-slot advance: ×4 → ×2 per char.
+     6B NOP at $058417-$05841C kills 2 of the 4 `INC $1C4C` instructions.
+     6B NOP at $058423-$058428 kills 2 of the 4 `INC $1C58` instructions.
 
-  Font byte layout in rbshura's slots (per the tilemap arrangement):
-    bytes  0-15  = TL tile (top-left 8x8)
-    bytes 16-31  = TR tile (top-right 8x8)
-    bytes 32-47  = BL tile (bottom-left 8x8)
-    bytes 48-63  = BR tile (bottom-right 8x8)
-  i.e. row-major TL/TR/BL/BR — confirmed by the +$40 tilemap RAM stride
-  between entry 1/2 (top row) and entry 3/4 (bottom row).
+Font layout matches PK natively (32 bytes/glyph = top tile + bottom tile).
+We copy PK's font directly into rbshura's 64-byte slots: bytes 0-31 = PK
+glyph (top+bottom contiguous, which is PK's native format); bytes 32-63
+are zeroed for cleanliness (never DMA'd at the new $20 size).
 
-Why earlier patches were wrong:
-  - My first padding put PK 32 bytes into rbshura bytes 0-31 (= TL+TR) →
-    PK's top and bottom tiles ended up rendered SIDE-BY-SIDE as a 16x8
-    char. That's the "side-by-side" the user saw.
-  - The Option B renderer port emitted 2 DMA entries per char but kept the
-    4-entry tilemap tail, leaving 2 of the 4 tile slots referencing stale
-    VRAM. Letters broke for the same reason.
+VRAM math (unchanged): VRAM_dest = $1C58 × 8 + $4000. With $1C58 += 2 per
+char and DMA = 16 words/char, char 0 → $4000-$400F, char 1 → $4010-$401F,
+etc — non-overlapping, 2 tiles per char.
 
-Correct padding:
-  - bytes  0-15 = PK top tile (becomes rbshura TL — top-left of cell)
-  - bytes 16-31 = ZEROS (TR — top-right is blank)
-  - bytes 32-47 = PK bottom tile (becomes rbshura BL — bottom-left)
-  - bytes 48-63 = ZEROS (BR — bottom-right is blank)
-
-  Result: each PK 8x16 Latin glyph displays in the LEFT 8 pixels of a
-  16x16 rbshura cell, with blank padding on the right and bottom-right.
-  Letters read normally; text appears spaced (16 px per char) but the
-  glyphs themselves are correctly oriented (top-on-top, bottom-on-bottom).
-
-This script also RESTORES the renderer at $05839F to vanilla rbshura
-bytes (reverting my earlier broken in-place and full-port patches).
-
-A pure Option B port that ALSO patches the tilemap arrangement (so chars
-render at 8-px spacing using only 2 tile slots per char in a single
-column) is a deeper change — would need to (a) change the renderer to
-emit 1 DMA of 32 bytes per char, (b) change the tilemap tail to write
-only 2 entries (TL position and BL position), (c) adjust the column-
-advance from 4 to 1. Tracked as future work after we visually confirm
-the padded font renders correctly.
+Tilemap math (now 1-column-per-char):
+  TL = tile# $1C58 at $1540,X
+  BL = tile# $1C58 + 1 at $1580,X
+  X = $1C4C, $1C4C += 2 per char → next char goes 1 tile column right.
 """
 from __future__ import annotations
 
@@ -65,37 +44,49 @@ JP_ROM = ROOT / "rbshura.sfc"
 OUT_ROM = ROOT / "rbshura_pkfont.sfc"
 
 FONT_PC = 0x100000
-PK_CHAR_BYTES = 32          # PK 8x16 glyph (top tile + bottom tile)
-JP_CHAR_BYTES = 64          # rbshura 16x16 slot (4 tiles TL/TR/BL/BR)
+PK_CHAR_BYTES = 32          # PK native: 8x16 glyph = top tile + bottom tile
+JP_CHAR_BYTES = 64          # rbshura slot stride
 N_GLYPHS = 80               # cover PK chars $00-$4F
-PK_FONT_BYTES = N_GLYPHS * PK_CHAR_BYTES  # 2560 bytes read from PK
-JP_FONT_BYTES = N_GLYPHS * JP_CHAR_BYTES  # 5120 bytes written into rbshura
+PK_FONT_BYTES = N_GLYPHS * PK_CHAR_BYTES
+JP_FONT_BYTES = N_GLYPHS * JP_CHAR_BYTES
+
+# Renderer patch sites (PC offsets in rbshura.sfc)
+RENDERER_START = 0x05839F
+RENDERER_END = 0x058430  # one past last byte of the renderer body
+
+# Sanity: the renderer must match the vanilla bytes we disassembled.
+# If this fails after a future ROM edit, the patch sites moved.
+VANILLA_RENDERER_HEAD = bytes([
+    0xC2, 0x30,                       # REP #$30
+    0xAC, 0x22, 0x0F,                 # LDY $0F22
+    0xA9, 0x80, 0x00,                 # LDA #$0080
+    0x99, 0x22, 0x0E,                 # STA $0E22,Y
+])
+
+# DMA byte-count literal site
+DMA_SIZE_LITERAL_PC = 0x0583D8        # byte after the LDA opcode
+
+# Tilemap NOP sites (start_pc, length)
+NOP_SITES = [
+    (0x058403, 5),   # STA $001542,X + the bridging INC A
+    (0x05840C, 5),   # INC A + STA $001582,X
+    (0x058417, 6),   # 2× INC $1C4C
+    (0x058423, 6),   # 2× INC $1C58
+]
 
 
 LATIN_MAP: dict[int, str] = {
-    # Verified end-to-end via emulator probes (2026-05-16):
     0x00: ' ',
-    # Lowercase a-z (verified by "hello world" probe)
     **{0x01 + i: chr(ord('a') + i) for i in range(26)},
-    # Pre-uppercase punctuation block (verified by probe4):
     0x1B: '.', 0x1C: '"', 0x1D: ',', 0x1E: '-', 0x1F: "'",
     0x20: '!',
-    # Uppercase A-Z (verified by uppercase probe, derived from $30=P observation):
     **{0x21 + i: chr(ord('A') + i) for i in range(26)},
     0x3B: '?',
-    # Post-? punctuation block (verified by probe3):
     0x3C: '(', 0x3D: ')', 0x3E: '/',
-    # 0x3F: blank slot in PK font
-    # Digits 0-9 (verified by probe1/2 + probe3 anchors):
     **{0x40 + i: chr(ord('0') + i) for i in range(10)},
     0x4A: ';',
-    # 0x4B-0x4D: blank slots in PK font
 }
 
-# Multi-target aliases: chars without their own glyph that piggyback on an
-# existing slot (visually displays as the alias target). User-specified
-# (2026-05-16): `[` and `]` → `"` slot ($1C); em-dash → hyphen slot ($1E);
-# ellipsis → three periods (multi-byte sequence $1B$1B$1B).
 ALIASES: list[tuple[str, bytes]] = [
     ('[', bytes([0x1C])),
     (']', bytes([0x1C])),
@@ -105,11 +96,6 @@ ALIASES: list[tuple[str, bytes]] = [
 
 
 def _unmapped_chars_in_en_scripts() -> list[str]:
-    """Scan data/en/*.txt for any char that's neither in LATIN_MAP, in ALIASES,
-    nor whitespace/bracket-syntax. These all get mapped to $00 (space) so the
-    encoder never fails on the EN data. User-directive (2026-05-16):
-    "anything else, just set to 00 (space)".
-    """
     import re
     mapped = set(LATIN_MAP.values()) | {ch for ch, _ in ALIASES} | {' ', '\n', '\t', '\r'}
     found: dict[str, None] = {}
@@ -124,38 +110,46 @@ def _unmapped_chars_in_en_scripts() -> list[str]:
 
 
 def patch_font(jp_rom: bytes, pk_rom: bytes) -> bytes:
-    """Pad PK glyphs into rbshura's TL/TR/BL/BR slot layout.
-
-    PK glyph layout (32 bytes):
-      bytes  0-15 = top tile (8x8)
-      bytes 16-31 = bottom tile (8x8)
-
-    rbshura slot layout (64 bytes, row-major):
-      bytes  0-15 = TL tile
-      bytes 16-31 = TR tile
-      bytes 32-47 = BL tile
-      bytes 48-63 = BR tile
-
-    Map PK top → rbshura TL, PK bottom → rbshura BL, leave TR/BR zero.
-    """
+    """Copy PK 32B glyphs into the first 32B of each rbshura 64B slot.
+    Bytes 32-63 of each slot are zeroed (never DMA'd at the new size)."""
     out = bytearray(jp_rom)
     for n in range(N_GLYPHS):
         pk_off = FONT_PC + n * PK_CHAR_BYTES
         jp_off = FONT_PC + n * JP_CHAR_BYTES
-        out[jp_off:jp_off + 16]       = pk_rom[pk_off:pk_off + 16]      # TL = PK top
-        out[jp_off + 16:jp_off + 32]  = b'\x00' * 16                     # TR = blank
-        out[jp_off + 32:jp_off + 48]  = pk_rom[pk_off + 16:pk_off + 32] # BL = PK bottom
-        out[jp_off + 48:jp_off + 64]  = b'\x00' * 16                     # BR = blank
+        out[jp_off:jp_off + 32] = pk_rom[pk_off:pk_off + 32]
+        out[jp_off + 32:jp_off + 64] = b'\x00' * 32
+    return bytes(out)
+
+
+def patch_renderer(rom: bytes) -> bytes:
+    """Apply the tight-8 renderer patch in-place (byte-count preserving)."""
+    # Verify the renderer head matches vanilla — guards against patching
+    # an already-patched ROM or a different ROM.
+    if rom[RENDERER_START:RENDERER_START + len(VANILLA_RENDERER_HEAD)] != VANILLA_RENDERER_HEAD:
+        raise SystemExit(
+            f"Renderer head at ${RENDERER_START:06X} does not match vanilla. "
+            f"Aborting to avoid double-patching."
+        )
+
+    out = bytearray(rom)
+
+    # 1. DMA byte count $40 → $20.
+    assert out[DMA_SIZE_LITERAL_PC - 1] == 0xA9, "expected LDA #imm at DMA size site"
+    assert out[DMA_SIZE_LITERAL_PC] == 0x40, "expected $40 at DMA size literal"
+    assert out[DMA_SIZE_LITERAL_PC + 1] == 0x00, "expected $00 hi byte at DMA size literal"
+    out[DMA_SIZE_LITERAL_PC] = 0x20
+
+    # 2-3. NOP out the deleted bytes (kill TR/BR tilemap writes + extra advances).
+    for start, length in NOP_SITES:
+        out[start:start + length] = b'\xEA' * length
+
     return bytes(out)
 
 
 def write_en_table(path: Path) -> None:
     lines = [
-        "; Rushing Beat Shura — ENGLISH encoding table (PK font padded for",
-        "; rbshura's TL/TR/BL/BR 16x16 renderer).",
-        ";",
-        "; Each PK 8x16 glyph occupies the LEFT half of its 16x16 rbshura slot",
-        "; (TL = PK top tile, BL = PK bottom tile, TR/BR blank).",
+        "; Rushing Beat Shura — ENGLISH encoding table (PK font 8x16 with the",
+        "; tight-8 renderer patch at $05839F — chars occupy a single tile column).",
         "",
         "@ctrl_prefix F7 F8 F9 FB FC FD FE FF",
         "@ctrl F7=2",
@@ -190,13 +184,12 @@ def write_en_table(path: Path) -> None:
 
 def inspect() -> None:
     pk = PK_ROM.read_bytes()
-    print(f"PK font: $100000-${FONT_PC + PK_FONT_BYTES - 1:06X} ({PK_FONT_BYTES}B, {N_GLYPHS}×{PK_CHAR_BYTES}B 8x16 glyphs)")
-    print(f"After padding into rbshura's TL/TR/BL/BR format:")
-    print(f"  $100000-${FONT_PC + JP_FONT_BYTES - 1:06X} ({JP_FONT_BYTES}B, {N_GLYPHS}×{JP_CHAR_BYTES}B 16x16 slots)")
-    print(f"\nPK top tile → rbshura TL  (left 8px of top row)")
-    print(f"rbshura TR  = zeros        (right 8px of top row)")
-    print(f"PK bot tile → rbshura BL  (left 8px of bottom row)")
-    print(f"rbshura BR  = zeros        (right 8px of bottom row)")
+    print(f"PK font: $100000-${FONT_PC + PK_FONT_BYTES - 1:06X}")
+    print(f"  ({PK_FONT_BYTES}B, {N_GLYPHS}×{PK_CHAR_BYTES}B 8x16 glyphs)")
+    print(f"\nTight-8 layout (matches PK natively):")
+    print(f"  bytes  0-15 = PK top tile (DMA'd as char's top row tile)")
+    print(f"  bytes 16-31 = PK bottom tile (DMA'd as char's bottom row tile)")
+    print(f"  bytes 32-63 = ZEROED (never DMA'd, slot stride still 64)")
 
 
 def main() -> None:
@@ -211,36 +204,45 @@ def main() -> None:
     pk = PK_ROM.read_bytes()
     jp = JP_ROM.read_bytes()
 
+    # 1. Font swap.
     out_bytes = patch_font(jp, pk)
+    # 2. Renderer patch (tight-8).
+    out_bytes = patch_renderer(out_bytes)
     OUT_ROM.write_bytes(out_bytes)
 
     en_table_path = ROOT / "tables" / "rbshura_en.tbl"
     write_en_table(en_table_path)
 
-    # Verify: only the font region changed (no renderer code patched — vanilla rbshura)
+    # Sanity: only font region + renderer slot changed.
     expected = bytearray(jp)
     expected[FONT_PC:FONT_PC + JP_FONT_BYTES] = out_bytes[FONT_PC:FONT_PC + JP_FONT_BYTES]
-    assert bytes(expected) == out_bytes, "patch corrupted bytes outside font region!"
+    expected[RENDERER_START:RENDERER_END] = out_bytes[RENDERER_START:RENDERER_END]
+    assert bytes(expected) == out_bytes, "patch corrupted bytes outside font + renderer regions!"
 
-    # Verify each padded slot has the correct TL/TR/BL/BR structure
+    # Verify font padding.
     for n in range(N_GLYPHS):
         pk_off = FONT_PC + n * PK_CHAR_BYTES
         jp_off = FONT_PC + n * JP_CHAR_BYTES
-        assert out_bytes[jp_off:jp_off + 16] == pk[pk_off:pk_off + 16], f"slot {n} TL"
-        assert out_bytes[jp_off + 16:jp_off + 32] == b'\x00' * 16, f"slot {n} TR"
-        assert out_bytes[jp_off + 32:jp_off + 48] == pk[pk_off + 16:pk_off + 32], f"slot {n} BL"
-        assert out_bytes[jp_off + 48:jp_off + 64] == b'\x00' * 16, f"slot {n} BR"
+        assert out_bytes[jp_off:jp_off + 32] == pk[pk_off:pk_off + 32], f"slot {n} top+bot"
+        assert out_bytes[jp_off + 32:jp_off + 64] == b'\x00' * 32, f"slot {n} pad zeros"
 
-    # Confirm renderer is back to vanilla rbshura (no code patches)
-    assert out_bytes[0x05839F:0x058430] == jp[0x05839F:0x058430], "renderer is not vanilla!"
+    # Verify renderer patches landed.
+    assert out_bytes[DMA_SIZE_LITERAL_PC] == 0x20, "DMA size patch missing"
+    for start, length in NOP_SITES:
+        assert out_bytes[start:start + length] == b'\xEA' * length, f"NOP site ${start:06X} missing"
 
     print(f"Wrote {OUT_ROM} ({len(out_bytes)} bytes)")
     print(f"Wrote {en_table_path}")
-    print(f"\nPadding: PK 8x16 glyphs in TL+BL of rbshura's 16x16 slots (vertical stack in left half).")
-    print(f"Renderer: vanilla rbshura (reverted from prior broken patches).")
-    print(f"\nNext: load {OUT_ROM} in Mesen2. Each Latin letter should appear")
-    print(f"as a correctly-oriented 8-wide glyph in the LEFT half of its")
-    print(f"16-pixel cell — top tile on top, bottom tile on bottom.")
+    print()
+    print("Renderer patches applied:")
+    print(f"  ${DMA_SIZE_LITERAL_PC:06X}: DMA size $40 → $20 (32 bytes / 2 tiles per char)")
+    for start, length in NOP_SITES:
+        print(f"  ${start:06X}: NOPed {length} bytes")
+    print()
+    print("Expected behavior in emulator:")
+    print(f"  Each Latin char now takes a single tile column (8 px wide).")
+    print(f"  Top tile in row 0, bottom tile in row 1, same column.")
+    print(f"  32 chars per line instead of 16.")
 
 
 if __name__ == "__main__":
