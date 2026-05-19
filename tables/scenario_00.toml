@@ -7,19 +7,25 @@ table_file = "tables/rbshura_en.tbl"
 terminator = 0xFF
 
 [pointers]
-# Scenario 0 string-pointer table. 16-bit LE pointers, 59 entries.
+# Scenario 0 string-pointer table. 24-bit LE HiROM pointers, 59 entries.
 # Pointer table address is SNES $85:86E4 (HiROM) = PC $0586E4.
+# Widened from 16-bit (size=2) to 24-bit (size=3) on 2026-05-17 — requires
+# the 24-bit pointer engine patch (patches/24bit_ptrs.asm) to be present
+# in the source ROM. With 24-bit ptrs the relocate handler routes every
+# entry into the [rom.build].freespace pool (24-bit fast path), so the
+# [data] region below is informational only — it is NOT used for packing.
 offset = "$8586E4"
 count = 59
-size = 2
+size = 3
 
 [data]
-# Strings live in HiROM bank $85's upper half ($8000-$FFFF). Permissive
-# bounds for now; scenarios share strings across the bank so a single
-# scenario's data region overlaps neighbors. Tighten when we move to
-# build (insertion) where ownership matters.
-offset = "$85875A"
-end = "$858E6B"
+# IGNORED under pointer-size=3. Kept for documentation: the original
+# 16-bit-ptr layout sized strings into $85875A..$858E6B. With the 24-bit
+# fast path every entry is allocated from freespace; the original slot
+# bytes are left untouched (overwritten by the new 3-byte ptr table
+# extending from $8586E4 + 59*3 = $858795).
+offset = "$858795"
+end = "$858795"
 
 [section]
 kind = "script"

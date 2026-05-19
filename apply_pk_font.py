@@ -79,12 +79,46 @@ LATIN_MAP: dict[int, str] = {
     0x00: ' ',
     **{0x01 + i: chr(ord('a') + i) for i in range(26)},
     0x1B: '.', 0x1C: '"', 0x1D: ',', 0x1E: '-', 0x1F: "'",
-    0x20: '!',
+    # 0x20 is the COLON glyph in the PK source font — two stacked dots, light
+    # serif outline + bright center. Previously mislabeled as '!' which made
+    # encoded "Damn... trap!" render as "trap:" — verified 2026-05-17 via
+    # script_editor.py. PK font ships no '!' glyph at all; we draw a custom
+    # one at slot 0x4B (see CUSTOM_GLYPHS below).
+    0x20: ':',
     **{0x21 + i: chr(ord('A') + i) for i in range(26)},
     0x3B: '?',
     0x3C: '(', 0x3D: ')', 0x3E: '/',
     **{0x40 + i: chr(ord('0') + i) for i in range(10)},
     0x4A: ';',
+    0x4B: '!',  # custom glyph painted into the font during patch (see below)
+}
+
+# Custom glyphs painted into otherwise-empty PK slots. Each entry maps a slot
+# index → 32 raw bytes (16 B top tile + 16 B bottom tile, standard SNES 2bpp,
+# row-interleaved bp0/bp1). Style matches the PK font's "light serif outline +
+# bright center stroke" convention (see slot 0x20 colon for the canonical
+# 4-row dot pattern that we reuse for the '!' base).
+CUSTOM_GLYPHS: dict[int, bytes] = {
+    0x4B: bytes.fromhex(
+        # Top tile: vertical stroke rows 0-7 (cols 3-4 bright + cols 2-5 light)
+        "3c00"  # r0: light serif top
+        "3c18"  # r1: serif + bright center
+        "3c18"
+        "3c18"
+        "3c18"
+        "3c18"
+        "3c18"
+        "3c00"  # r7: light fade
+        # Bottom tile: gap (rows 0-1) + dot (rows 2-5) + tail (rows 6-7)
+        "0000"  # r0: gap
+        "0000"
+        "3c00"  # r2: dot top serif
+        "3c18"
+        "3c18"
+        "3c00"  # r5: dot bottom serif
+        "0000"
+        "0000"
+    ),
 }
 
 ALIASES: list[tuple[str, bytes]] = [
@@ -111,13 +145,23 @@ def _unmapped_chars_in_en_scripts() -> list[str]:
 
 def patch_font(jp_rom: bytes, pk_rom: bytes) -> bytes:
     """Copy PK 32B glyphs into the first 32B of each rbshura 64B slot.
-    Bytes 32-63 of each slot are zeroed (never DMA'd at the new size)."""
+    Bytes 32-63 of each slot are zeroed (never DMA'd at the new size).
+    After the bulk copy, overlay any CUSTOM_GLYPHS (e.g. '!' at 0x4B) so
+    chars missing from the PK source still have a usable rendering."""
     out = bytearray(jp_rom)
     for n in range(N_GLYPHS):
         pk_off = FONT_PC + n * PK_CHAR_BYTES
         jp_off = FONT_PC + n * JP_CHAR_BYTES
         out[jp_off:jp_off + 32] = pk_rom[pk_off:pk_off + 32]
         out[jp_off + 32:jp_off + 64] = b'\x00' * 32
+    for slot, glyph in CUSTOM_GLYPHS.items():
+        if len(glyph) != 32:
+            raise SystemExit(
+                f"CUSTOM_GLYPHS[0x{slot:02X}] must be exactly 32 bytes "
+                f"(got {len(glyph)})"
+            )
+        jp_off = FONT_PC + slot * JP_CHAR_BYTES
+        out[jp_off:jp_off + 32] = glyph
     return bytes(out)
 
 
@@ -219,11 +263,16 @@ def main() -> None:
     expected[RENDERER_START:RENDERER_END] = out_bytes[RENDERER_START:RENDERER_END]
     assert bytes(expected) == out_bytes, "patch corrupted bytes outside font + renderer regions!"
 
-    # Verify font padding.
+    # Verify font padding. Slots in CUSTOM_GLYPHS are intentionally
+    # different from the PK source (they hold our hand-drawn glyphs);
+    # check those against the custom bytes instead.
     for n in range(N_GLYPHS):
         pk_off = FONT_PC + n * PK_CHAR_BYTES
         jp_off = FONT_PC + n * JP_CHAR_BYTES
-        assert out_bytes[jp_off:jp_off + 32] == pk[pk_off:pk_off + 32], f"slot {n} top+bot"
+        if n in CUSTOM_GLYPHS:
+            assert out_bytes[jp_off:jp_off + 32] == CUSTOM_GLYPHS[n], f"slot {n} custom glyph mismatch"
+        else:
+            assert out_bytes[jp_off:jp_off + 32] == pk[pk_off:pk_off + 32], f"slot {n} top+bot"
         assert out_bytes[jp_off + 32:jp_off + 64] == b'\x00' * 32, f"slot {n} pad zeros"
 
     # Verify renderer patches landed.

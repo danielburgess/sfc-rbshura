@@ -7,10 +7,12 @@ table_file = "tables/rbshura_en.tbl"
 terminator = 0xFF
 
 [pointers]
-# 16-bit LE pointers in HiROM bank $85 (43 entries).
+# 24-bit LE HiROM pointers (43 entries). Widened 2026-05-17 — see
+# [[project_24bit_ptr_methodology]]. [data] block below is informational
+# only; the relocate handler routes every entry to [rom.build].freespace.
 offset = "$85BFA1"
 count = 43
-size = 2
+size = 3
 
 [data]
 # Bank $85 upper-half ROM region. Permissive bounds — scenarios
