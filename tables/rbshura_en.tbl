@@ -73,9 +73,10 @@
 39=Y
 3A=Z
 3B=?
-3C=(
-3D=)
-3E=/
+3C=!
+3D=(
+3E=)
+3F=/
 40=0
 41=1
 42=2
@@ -87,7 +88,6 @@
 48=8
 49=9
 4A=;
-4B=!
 
 ; --- Aliases (chars without dedicated glyphs piggyback on existing slots) ---
 1C=[

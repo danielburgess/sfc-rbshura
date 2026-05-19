@@ -79,47 +79,32 @@ LATIN_MAP: dict[int, str] = {
     0x00: ' ',
     **{0x01 + i: chr(ord('a') + i) for i in range(26)},
     0x1B: '.', 0x1C: '"', 0x1D: ',', 0x1E: '-', 0x1F: "'",
-    # 0x20 is the COLON glyph in the PK source font — two stacked dots, light
-    # serif outline + bright center. Previously mislabeled as '!' which made
-    # encoded "Damn... trap!" render as "trap:" — verified 2026-05-17 via
-    # script_editor.py. PK font ships no '!' glyph at all; we draw a custom
-    # one at slot 0x4B (see CUSTOM_GLYPHS below).
+    # 0x20 is the COLON glyph in the PK source font — two stacked dots.
+    # Previously mislabeled as '!' (verified 2026-05-17 via script_editor.py).
     0x20: ':',
     **{0x21 + i: chr(ord('A') + i) for i in range(26)},
-    0x3B: '?',
-    0x3C: '(', 0x3D: ')', 0x3E: '/',
+    # The PK font's punctuation block at 0x3B..0x3F is shifted by one slot
+    # from what the original apply_pk_font.py charmap claimed. Confirmed by
+    # rendering each slot 2026-05-19 after user reported "(=! )=( " in
+    # in-game preview. Actual layout:
+    #   0x3B = '?'
+    #   0x3C = '!'   ← was '(' (the real exclamation, no custom glyph needed)
+    #   0x3D = '('   ← was ')'
+    #   0x3E = ')'   ← was '/'
+    #   0x3F = '/'   ← was unmapped
+    0x3B: '?', 0x3C: '!', 0x3D: '(', 0x3E: ')', 0x3F: '/',
     **{0x40 + i: chr(ord('0') + i) for i in range(10)},
     0x4A: ';',
-    0x4B: '!',  # custom glyph painted into the font during patch (see below)
+    # 0x4B previously held a hand-drawn '!' custom glyph (workaround for the
+    # mis-labeled 0x3C). Removed 2026-05-19 now that the real '!' at 0x3C is
+    # correctly mapped — the slot reverts to blank in the PK source.
 }
 
-# Custom glyphs painted into otherwise-empty PK slots. Each entry maps a slot
-# index → 32 raw bytes (16 B top tile + 16 B bottom tile, standard SNES 2bpp,
-# row-interleaved bp0/bp1). Style matches the PK font's "light serif outline +
-# bright center stroke" convention (see slot 0x20 colon for the canonical
-# 4-row dot pattern that we reuse for the '!' base).
-CUSTOM_GLYPHS: dict[int, bytes] = {
-    0x4B: bytes.fromhex(
-        # Top tile: vertical stroke rows 0-7 (cols 3-4 bright + cols 2-5 light)
-        "3c00"  # r0: light serif top
-        "3c18"  # r1: serif + bright center
-        "3c18"
-        "3c18"
-        "3c18"
-        "3c18"
-        "3c18"
-        "3c00"  # r7: light fade
-        # Bottom tile: gap (rows 0-1) + dot (rows 2-5) + tail (rows 6-7)
-        "0000"  # r0: gap
-        "0000"
-        "3c00"  # r2: dot top serif
-        "3c18"
-        "3c18"
-        "3c00"  # r5: dot bottom serif
-        "0000"
-        "0000"
-    ),
-}
+# Custom glyphs painted into otherwise-empty PK slots. Empty for now — the
+# '!' custom glyph at 0x4B was removed 2026-05-19 when the punctuation
+# slot mapping was corrected. Mechanism stays in `patch_font` for future
+# missing-char additions.
+CUSTOM_GLYPHS: dict[int, bytes] = {}
 
 ALIASES: list[tuple[str, bytes]] = [
     ('[', bytes([0x1C])),

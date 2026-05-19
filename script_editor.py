@@ -37,6 +37,10 @@ EN_DATA_DIR = ROOT / "data" / "en"
 EN_TABLE_PATH = ROOT / "tables" / "rbshura_en.tbl"
 PORTRAIT_ASSETS = ROOT / "assets" / "portraits"
 
+# Per-user editor state (last scenario / entry / cursor). Project-local so
+# it travels with the checkout if someone re-clones. JSON, gitignored.
+EDITOR_STATE_PATH = ROOT / ".editor-state.json"
+
 # Source-of-truth ROM for the font preview. Must be patched with the PK font
 # + half-width renderer (apply_pk_font.py) so the bytes at FONT_PC match
 # what the in-game renderer actually DMAs to VRAM. We prefer the
@@ -582,6 +586,12 @@ class Bridge:
         self._save_timer: Optional[threading.Timer] = None
         self._save_lock = threading.Lock()
         self._pending: dict[tuple[str, int], str] = {}
+        # Save state: "idle" → "queued" → "saving" → "saved" / "error".
+        # JS polls get_save_state() after queueing a save so the badge can
+        # remain in "saving" until Python has actually flushed to disk.
+        self._save_state = "idle"
+        self._save_error: Optional[str] = None
+        self._save_seq = 0  # monotonic; lets JS detect "this save completed"
         for p in sorted(EN_DATA_DIR.glob("scenario_*.txt")):
             self.scenarios[p.stem] = Scenario(p)
 
@@ -660,6 +670,8 @@ class Bridge:
     def queue_save(self, scenario_name: str, entry_i: int, body: str) -> None:
         with self._save_lock:
             self._pending[(scenario_name, entry_i)] = body
+            self._save_state = "queued"
+            self._save_error = None
             if self._save_timer is not None:
                 self._save_timer.cancel()
             self._save_timer = threading.Timer(0.4, self._flush_pending)
@@ -671,23 +683,81 @@ class Bridge:
             pending = dict(self._pending)
             self._pending.clear()
             self._save_timer = None
+            self._save_state = "saving"
         # Group writes by scenario so each file is written once
         by_scen: dict[str, list[tuple[int, str]]] = {}
         for (name, i), body in pending.items():
             by_scen.setdefault(name, []).append((i, body))
-        for name, items in by_scen.items():
-            sc = self.scenarios[name]
-            for i, body in items:
-                sc.entries[i]["body"] = body
-            # Save once per scenario after applying all queued edits
-            sc.save_entry(items[-1][0], items[-1][1])
+        try:
+            for name, items in by_scen.items():
+                sc = self.scenarios[name]
+                for i, body in items:
+                    sc.entries[i]["body"] = body
+                # Save once per scenario after applying all queued edits
+                sc.save_entry(items[-1][0], items[-1][1])
+        except Exception as exc:
+            with self._save_lock:
+                self._save_state = "error"
+                self._save_error = f"{type(exc).__name__}: {exc}"
+                self._save_seq += 1
+            raise
+        with self._save_lock:
+            self._save_state = "saved"
+            self._save_seq += 1
 
     # ---- forced sync save (used on window close, manual save) ----
     def flush_now(self) -> None:
         if self._save_timer is not None:
             self._save_timer.cancel()
             self._save_timer = None
-        self._flush_pending()
+        if self._pending:
+            self._flush_pending()
+
+    # ---- save state for the UI indicator ----
+    def get_save_state(self) -> dict:
+        """JS polls this to update the badge. Returns the current state,
+        any error message, and a monotonic seq so JS can detect when a
+        new save has completed."""
+        with self._save_lock:
+            return {
+                "state": self._save_state,
+                "error": self._save_error,
+                "seq": self._save_seq,
+            }
+
+    # ---- session persistence (last scenario / entry / cursor) ----
+    def load_session_state(self) -> dict:
+        """Read the persisted editor state. Returns {} on first launch
+        or if the file is missing / corrupt. Schema:
+          {scenario: str, entry_i: int, cursor: int, scroll: int}
+        """
+        try:
+            return json.loads(EDITOR_STATE_PATH.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def save_session_state(self, scenario: str, entry_i: int,
+                            cursor: int = 0, scroll: int = 0) -> None:
+        """Persist the current selection. Best-effort — failures are
+        non-fatal (just lost state on next launch). Atomic via temp + rename."""
+        payload = {
+            "scenario": scenario,
+            "entry_i": entry_i,
+            "cursor": cursor,
+            "scroll": scroll,
+        }
+        try:
+            fd, tmp = tempfile.mkstemp(
+                dir=str(EDITOR_STATE_PATH.parent),
+                prefix=f".{EDITOR_STATE_PATH.name}.",
+                suffix=".tmp",
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+            os.replace(tmp, EDITOR_STATE_PATH)
+        except Exception:
+            # Silent — losing session state shouldn't disrupt editing.
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -721,10 +791,40 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
 .editor { flex: 1; display: flex; flex-direction: column; }
 .toolbar { padding: 8px 12px; background: var(--bg2); border-bottom: 1px solid var(--brd);
            display: flex; align-items: center; gap: 12px; font-size: 12px; }
-.toolbar .status { color: var(--fg2); }
-.toolbar .status.saved { color: var(--grn); }
-.toolbar .status.dirty { color: var(--yel); }
-.toolbar .status.error { color: var(--acc); }
+
+/* Save-status badge. Pill with a colored dot + text. */
+.savebadge { display: inline-flex; align-items: center; gap: 6px;
+             padding: 3px 10px; border-radius: 999px; font-size: 11px;
+             border: 1px solid var(--brd); background: var(--bg);
+             color: var(--fg2); transition: background-color .15s, color .15s; }
+.savebadge .dot { width: 8px; height: 8px; border-radius: 50%;
+                  background: var(--fg2); transition: background-color .15s; }
+.savebadge.idle    { color: var(--fg2); }
+.savebadge.idle .dot    { background: var(--fg2); }
+.savebadge.dirty   { color: var(--yel); border-color: var(--yel); }
+.savebadge.dirty .dot   { background: var(--yel);
+                          animation: dirty-pulse 1s ease-in-out infinite; }
+.savebadge.saving  { color: var(--bg3-fg, #66a8ff); border-color: #66a8ff;
+                     background: rgba(102,168,255,.08); }
+.savebadge.saving .dot  { background: #66a8ff;
+                          animation: saving-spin .8s linear infinite; }
+.savebadge.saved   { color: var(--grn); border-color: var(--grn);
+                     background: rgba(78,204,163,.08); }
+.savebadge.saved .dot   { background: var(--grn); }
+.savebadge.saved .check { color: var(--grn); font-weight: 700; }
+.savebadge.error   { color: var(--acc); border-color: var(--acc);
+                     background: rgba(233,69,96,.08); }
+.savebadge.error .dot   { background: var(--acc); }
+
+@keyframes dirty-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+@keyframes saving-spin {
+  /* simple "breathing" pulse — easier to read than a CSS-only spinner */
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.4); opacity: 0.6; }
+}
 .panes { flex: 1; display: grid; grid-template-rows: minmax(160px, 50vh) 1fr;
          overflow: hidden; }
 .preview { padding: 16px; background: #050511; border-bottom: 1px solid var(--brd);
@@ -762,7 +862,10 @@ textarea:focus { border-color: var(--acc); }
   <div class="col editor">
     <div class="toolbar">
       <span id="ent-label">No entry selected</span>
-      <span class="status" id="status">—</span>
+      <span class="savebadge idle" id="savebadge" title="Save status">
+        <span class="dot"></span>
+        <span class="label" id="savebadge-label">idle</span>
+      </span>
       <span style="flex:1"></span>
       <span class="hint">Autosave on edit · live preview</span>
     </div>
@@ -807,6 +910,41 @@ async function loadScenarios() {
     div.onclick = () => selectScenario(it.name);
     list.appendChild(div);
   });
+  // After listing, restore the previous session if any.
+  const st = await pywebview.api.load_session_state();
+  if (st && st.scenario) {
+    await selectScenario(st.scenario);
+    if (typeof st.entry_i === 'number') {
+      await selectEntry(st.entry_i);
+      // Defer cursor/scroll restore until after the textarea is populated
+      // by selectEntry (which awaits get_entry).
+      const ta = document.getElementById('body');
+      if (typeof st.cursor === 'number') {
+        try { ta.setSelectionRange(st.cursor, st.cursor); } catch (e) {}
+      }
+      if (typeof st.scroll === 'number') {
+        ta.scrollTop = st.scroll;
+      }
+      // Scroll the entry into view in the middle pane.
+      const item = document.querySelector(`#ent-list .item[data-i="${st.entry_i}"]`);
+      if (item) item.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }
+}
+
+// Debounced session-state save — fires on cursor/scroll/edit changes.
+let SESSION_SAVE_TIMER = null;
+function bumpSessionSave() {
+  if (CURRENT.scenario === null || CURRENT.entry_i === null) return;
+  if (SESSION_SAVE_TIMER) clearTimeout(SESSION_SAVE_TIMER);
+  SESSION_SAVE_TIMER = setTimeout(() => {
+    const ta = document.getElementById('body');
+    pywebview.api.save_session_state(
+      CURRENT.scenario, CURRENT.entry_i,
+      ta.selectionStart || 0,
+      ta.scrollTop || 0,
+    );
+  }, 500);
 }
 
 async function selectScenario(name) {
@@ -861,15 +999,49 @@ async function selectEntry(i) {
   }
   document.getElementById('ent-label').textContent =
     `${CURRENT.scenario} · entry #${i}`;
-  setStatus('saved', 'loaded');
+  // Loading a new entry resets the badge to idle — any pending save from
+  // the previous entry has already been queued via queue_save.
+  if (SAVED_FADE_TIMER) { clearTimeout(SAVED_FADE_TIMER); SAVED_FADE_TIMER = null; }
+  setBadge('idle', 'idle');
   document.getElementById('empty').style.display = 'none';
   document.getElementById('panes').style.display = 'grid';
+  bumpSessionSave();
 }
 
-function setStatus(cls, text) {
-  const el = document.getElementById('status');
-  el.className = 'status ' + cls;
-  el.textContent = text;
+// Save-state machine:
+//   user types         → setBadge('dirty', 'editing…')
+//   debounce fires     → setBadge('saving', 'saving…')
+//   bridge ack (poll)  → setBadge('saved', 'saved ✓')  (3s auto-fade to idle)
+//   bridge error       → setBadge('error', 'save failed')
+let SAVE_POLL = null;
+let LAST_SEEN_SEQ = 0;
+let SAVED_FADE_TIMER = null;
+
+function setBadge(cls, text) {
+  const el = document.getElementById('savebadge');
+  el.className = 'savebadge ' + cls;
+  document.getElementById('savebadge-label').textContent = text;
+}
+
+function startSavePolling() {
+  if (SAVE_POLL) return;
+  SAVE_POLL = setInterval(async () => {
+    try {
+      const s = await pywebview.api.get_save_state();
+      if (s.state === 'queued' || s.state === 'saving') {
+        setBadge('saving', 'saving…');
+      } else if (s.state === 'saved' && s.seq !== LAST_SEEN_SEQ) {
+        LAST_SEEN_SEQ = s.seq;
+        setBadge('saved', 'saved ✓');
+        clearInterval(SAVE_POLL); SAVE_POLL = null;
+        if (SAVED_FADE_TIMER) clearTimeout(SAVED_FADE_TIMER);
+        SAVED_FADE_TIMER = setTimeout(() => setBadge('idle', 'idle'), 3000);
+      } else if (s.state === 'error') {
+        setBadge('error', 'save failed: ' + (s.error || 'unknown'));
+        clearInterval(SAVE_POLL); SAVE_POLL = null;
+      }
+    } catch (e) { /* swallow — keep polling */ }
+  }, 120);
 }
 
 function escapeHtml(s) {
@@ -879,25 +1051,34 @@ function escapeHtml(s) {
 document.getElementById('body').addEventListener('input', () => {
   if (CURRENT.entry_i === null) return;
   const body = document.getElementById('body').value;
-  setStatus('dirty', 'editing…');
+  setBadge('dirty', 'editing…');
+  bumpSessionSave();
   if (DEBOUNCE) clearTimeout(DEBOUNCE);
   DEBOUNCE = setTimeout(async () => {
     try {
       const png = await pywebview.api.render_body(body);
       document.getElementById('preview-img').src = png;
       await pywebview.api.queue_save(CURRENT.scenario, CURRENT.entry_i, body);
-      setStatus('saved', 'autosaved');
+      // queue_save returns immediately; the file write happens ~400ms later
+      // on a Python Timer. Poll get_save_state() to know when it lands.
+      startSavePolling();
     } catch (err) {
-      setStatus('error', 'save failed: ' + err);
+      setBadge('error', 'save failed: ' + err);
     }
   }, 200);
 });
 
+// Cursor & scroll movements within the textarea also update session state.
+document.getElementById('body').addEventListener('keyup', bumpSessionSave);
+document.getElementById('body').addEventListener('click', bumpSessionSave);
+document.getElementById('body').addEventListener('scroll', bumpSessionSave);
+
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
+    setBadge('saving', 'saving (manual)…');
     pywebview.api.flush_now();
-    setStatus('saved', 'flushed');
+    startSavePolling();
   }
 });
 
