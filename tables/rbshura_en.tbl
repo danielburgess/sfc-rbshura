@@ -88,6 +88,7 @@
 48=8
 49=9
 4A=;
+4B=*
 
 ; --- Aliases (chars without dedicated glyphs piggyback on existing slots) ---
 1C=[
@@ -96,6 +97,5 @@
 1B1B1B=…
 
 ; --- Unmapped script chars → $00 (space) per user directive 2026-05-16 ---
-00=*
 
 **=[**]

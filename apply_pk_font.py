@@ -95,16 +95,45 @@ LATIN_MAP: dict[int, str] = {
     0x3B: '?', 0x3C: '!', 0x3D: '(', 0x3E: ')', 0x3F: '/',
     **{0x40 + i: chr(ord('0') + i) for i in range(10)},
     0x4A: ';',
-    # 0x4B previously held a hand-drawn '!' custom glyph (workaround for the
-    # mis-labeled 0x3C). Removed 2026-05-19 now that the real '!' at 0x3C is
-    # correctly mapped — the slot reverts to blank in the PK source.
+    # 0x4B holds a hand-drawn asterisk (added 2026-05-19). PK font ships no
+    # '*' glyph; without this, translations using *kahh* / *gasp* style
+    # emphasis rendered as spaces.
+    0x4B: '*',
 }
 
-# Custom glyphs painted into otherwise-empty PK slots. Empty for now — the
-# '!' custom glyph at 0x4B was removed 2026-05-19 when the punctuation
-# slot mapping was corrected. Mechanism stays in `patch_font` for future
-# missing-char additions.
-CUSTOM_GLYPHS: dict[int, bytes] = {}
+# Custom glyphs painted into otherwise-empty PK slots. Each entry maps
+# slot index → 32 bytes (16 B top tile + 16 B bottom tile, standard SNES
+# 2bpp row-interleaved bp0/bp1).
+CUSTOM_GLYPHS: dict[int, bytes] = {
+    # 0x4B: '*' — 6-point asterisk shape, fits in the upper-mid portion of
+    # an 8x16 glyph (rows 1-5 of top tile, bottom tile blank).
+    #
+    #   row 0: ........
+    #   row 1: ..#..#..    diagonals upper
+    #   row 2: ...##...    center bar start
+    #   row 3: .######.    horizontal cross
+    #   row 4: ...##...    center bar end
+    #   row 5: ..#..#..    diagonals lower
+    #   row 6: ........
+    #   row 7: ........
+    #
+    # Encoded as value-3 pixels (both bitplanes set), matching the bright
+    # stroke color used by the rest of the PK font's main glyph strokes.
+    0x4B: bytes.fromhex(
+        # Top tile — bp0 / bp1 per row, both identical for value-3 pixels.
+        "0000"  # r0
+        "2424"  # r1
+        "1818"  # r2
+        "7e7e"  # r3
+        "1818"  # r4
+        "2424"  # r5
+        "0000"  # r6
+        "0000"  # r7
+        # Bottom tile — all blank (asterisk only uses the upper portion).
+        "0000" "0000" "0000" "0000"
+        "0000" "0000" "0000" "0000"
+    ),
+}
 
 ALIASES: list[tuple[str, bytes]] = [
     ('[', bytes([0x1C])),

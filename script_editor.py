@@ -33,13 +33,20 @@ from typing import Optional
 from PIL import Image
 
 ROOT = Path(__file__).parent
-EN_DATA_DIR = ROOT / "data" / "en"
+DEFAULT_EN_DATA_DIR = ROOT / "data" / "en"
+DEFAULT_JP_DATA_DIR = ROOT / "data" / "jp"
 EN_TABLE_PATH = ROOT / "tables" / "rbshura_en.tbl"
 PORTRAIT_ASSETS = ROOT / "assets" / "portraits"
 
-# Per-user editor state (last scenario / entry / cursor). Project-local so
-# it travels with the checkout if someone re-clones. JSON, gitignored.
+# Per-user editor state (last scenario / entry / cursor + folder config).
+# Project-local so it travels with the checkout if someone re-clones.
+# JSON, gitignored.
 EDITOR_STATE_PATH = ROOT / ".editor-state.json"
+
+# Kept as a module-level constant for backward compatibility with any
+# scripts that import this. Bridge instances use self.en_data_dir which
+# may be overridden via set_settings().
+EN_DATA_DIR = DEFAULT_EN_DATA_DIR
 
 # Source-of-truth ROM for the font preview. Must be patched with the PK font
 # + half-width renderer (apply_pk_font.py) so the bytes at FONT_PC match
@@ -583,6 +590,7 @@ class Bridge:
         self.rom, self.palettes, self.atlases = load_font_atlases()
         self.char_to_byte = load_table()
         self.scenarios: dict[str, Scenario] = {}
+        self.jp_scenarios: dict[str, Scenario] = {}
         self._save_timer: Optional[threading.Timer] = None
         self._save_lock = threading.Lock()
         self._pending: dict[tuple[str, int], str] = {}
@@ -592,8 +600,21 @@ class Bridge:
         self._save_state = "idle"
         self._save_error: Optional[str] = None
         self._save_seq = 0  # monotonic; lets JS detect "this save completed"
-        for p in sorted(EN_DATA_DIR.glob("scenario_*.txt")):
+        # Load folder config from session state (defaults if missing).
+        st = self.load_session_state()
+        self.en_data_dir = Path(st.get("en_dir") or str(DEFAULT_EN_DATA_DIR))
+        self.jp_data_dir = Path(st.get("jp_dir") or str(DEFAULT_JP_DATA_DIR))
+        self._reload_scenarios()
+
+    def _reload_scenarios(self) -> None:
+        """Re-scan EN + JP folders. JP is read-only reference."""
+        self.scenarios = {}
+        self.jp_scenarios = {}
+        for p in sorted(self.en_data_dir.glob("scenario_*.txt")):
             self.scenarios[p.stem] = Scenario(p)
+        if self.jp_data_dir.exists():
+            for p in sorted(self.jp_data_dir.glob("scenario_*.txt")):
+                self.jp_scenarios[p.stem] = Scenario(p)
 
     def _palette_for(self, portrait_id: Optional[int]) -> tuple[Image.Image, tuple[int,int,int,int]]:
         """Return (atlas, backdrop_rgba) for the given speaker. Defaults to
@@ -651,8 +672,15 @@ class Bridge:
         atlas, backdrop = self._palette_for(pid)
         png = render_preview(e["body"], atlas, self.char_to_byte, backdrop)
         b64 = base64.b64encode(png).decode("ascii")
+        # Look up the JP counterpart by entry index when available.
+        jp_body = ""
+        if scenario_name in self.jp_scenarios:
+            jp_sc = self.jp_scenarios[scenario_name]
+            if entry_i < len(jp_sc.entries):
+                jp_body = jp_sc.entries[entry_i]["body"]
         return {
             "body": e["body"],
+            "jp_body": jp_body,
             "preview_png": f"data:image/png;base64,{b64}",
             "portrait_id": pid,
             "portrait_name": portrait_name(pid) if pid is not None else None,
@@ -724,6 +752,149 @@ class Bridge:
                 "error": self._save_error,
                 "seq": self._save_seq,
             }
+
+    # ---- folder settings (editable + reference) ----
+    @staticmethod
+    def _label_from_dir(path: Path) -> str:
+        """Display label = folder basename uppercased. Empty string if the
+        path is a root or unparseable. Used so the UI says 'EN' / 'JP' /
+        'FR' / 'ES' depending on what the user set as their data folders."""
+        name = path.name or path.parent.name
+        return name.upper()[:8] or "—"
+
+    def get_settings(self) -> dict:
+        return {
+            "en_dir": str(self.en_data_dir),
+            "jp_dir": str(self.jp_data_dir),
+            "en_dir_exists": self.en_data_dir.exists(),
+            "jp_dir_exists": self.jp_data_dir.exists(),
+            "default_en_dir": str(DEFAULT_EN_DATA_DIR),
+            "default_jp_dir": str(DEFAULT_JP_DATA_DIR),
+            # Display labels derived from folder basenames (uppercased).
+            # The editor uses these wherever it used to say "EN" / "JP"
+            # so the UI generalizes to other languages without code edits.
+            "editable_label": self._label_from_dir(self.en_data_dir),
+            "reference_label": self._label_from_dir(self.jp_data_dir),
+        }
+
+    def pick_folder(self, initial_path: str = "") -> Optional[str]:
+        """Open the OS native folder picker. Returns the chosen path or None
+        if the user cancelled. Called by the settings modal's Browse button."""
+        try:
+            import webview
+        except ImportError:
+            return None
+        if not webview.windows:
+            return None
+        win = webview.windows[0]
+        try:
+            initial = initial_path or str(self.en_data_dir.parent
+                                          if self.en_data_dir.exists()
+                                          else ROOT)
+            # FOLDER_DIALOG returns a tuple of paths (or None on cancel).
+            result = win.create_file_dialog(
+                webview.FOLDER_DIALOG,
+                directory=initial,
+                allow_multiple=False,
+            )
+        except Exception:
+            return None
+        if not result:
+            return None
+        # pywebview returns either a list/tuple of paths or a single string
+        return result[0] if isinstance(result, (list, tuple)) else result
+
+    def set_settings(self, en_dir: str, jp_dir: str) -> dict:
+        """Update the active folder paths and reload scenarios. Persists the
+        new paths into the session state file. Returns the new settings dict
+        plus the list of scenarios under the new EN dir."""
+        if en_dir:
+            self.en_data_dir = Path(en_dir).expanduser()
+        if jp_dir:
+            self.jp_data_dir = Path(jp_dir).expanduser()
+        # Persist into session-state (merge with existing fields)
+        st = self.load_session_state()
+        st["en_dir"] = str(self.en_data_dir)
+        st["jp_dir"] = str(self.jp_data_dir)
+        try:
+            fd, tmp = tempfile.mkstemp(
+                dir=str(EDITOR_STATE_PATH.parent),
+                prefix=f".{EDITOR_STATE_PATH.name}.",
+                suffix=".tmp",
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(st, f)
+            os.replace(tmp, EDITOR_STATE_PATH)
+        except Exception:
+            pass
+        self._reload_scenarios()
+        return self.get_settings()
+
+    # ---- cross-scenario find / find-and-replace ----
+    def search_text(
+        self,
+        query: str,
+        case_sensitive: bool = False,
+        use_regex: bool = False,
+        scope: str = "all",      # "all" or a specific scenario name
+        side: str = "en",        # "en" (search editable) or "jp" (reference)
+    ) -> dict:
+        # NOTE: signature kept positional (no `*`) because pywebview's JS
+        # bridge passes arguments positionally — kw-only args would 500.
+        """Search entry bodies for `query`. Returns matches as a list of
+        {scenario, entry_i, line, before, match, after} per hit.
+
+        Up to 500 matches returned (UI hard-cap). `error` set if the regex
+        was invalid."""
+        try:
+            if use_regex:
+                pat = re.compile(query, 0 if case_sensitive else re.IGNORECASE)
+            else:
+                pat = re.compile(
+                    re.escape(query), 0 if case_sensitive else re.IGNORECASE,
+                )
+        except re.error as e:
+            return {"matches": [], "error": str(e)}
+
+        scenarios = self.scenarios if side == "en" else self.jp_scenarios
+        if scope != "all":
+            scenarios = {k: v for k, v in scenarios.items() if k == scope}
+
+        matches: list[dict] = []
+        for name, sc in scenarios.items():
+            for i, e in enumerate(sc.entries):
+                body = e["body"]
+                for m in pat.finditer(body):
+                    s, ee = m.span()
+                    matches.append({
+                        "scenario": name,
+                        "entry_i": i,
+                        "start": s,
+                        "end": ee,
+                        "before": body[max(0, s - 24):s],
+                        "match": body[s:ee],
+                        "after": body[ee:min(len(body), ee + 24)],
+                    })
+                    if len(matches) >= 500:
+                        return {"matches": matches, "truncated": True, "error": None}
+        return {"matches": matches, "truncated": False, "error": None}
+
+    def replace_text(
+        self,
+        scenario_name: str,
+        entry_i: int,
+        start: int,
+        end: int,
+        replacement: str,
+    ) -> dict:
+        """Replace bytes [start:end] of one entry's body with `replacement`,
+        then queue the save. Returns the new full body. Used by JS for the
+        find-and-replace path."""
+        sc = self.scenarios[scenario_name]
+        e = sc.entries[entry_i]
+        new_body = e["body"][:start] + replacement + e["body"][end:]
+        self.queue_save(scenario_name, entry_i, new_body)
+        return {"body": new_body}
 
     # ---- session persistence (last scenario / entry / cursor) ----
     def load_session_state(self) -> dict:
@@ -843,12 +1014,71 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
 .portrait-name { font-size: 11px; color: var(--fg); text-align: center; }
 .portrait-pid { font-size: 10px; color: var(--fg2); font-family: var(--code); }
 .preview img { image-rendering: pixelated; image-rendering: crisp-edges; }
-.text-area { flex: 1; display: flex; flex-direction: column; padding: 12px; gap: 8px; }
-.text-area label { font-size: 11px; color: var(--fg2); text-transform: uppercase; letter-spacing: .5px; }
+.text-area { flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+             gap: 8px; padding: 12px; overflow: hidden; }
+.text-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.text-col label { font-size: 11px; color: var(--fg2); text-transform: uppercase;
+                  letter-spacing: .5px; display: flex; align-items: center; gap: 6px; }
+.text-col label .ro { font-size: 10px; padding: 1px 6px; border-radius: 3px;
+                      background: var(--bg3); color: var(--fg2); border: 1px solid var(--brd); }
 textarea { flex: 1; font-family: var(--code); font-size: 13px; line-height: 1.5;
            background: var(--bg2); color: var(--fg); border: 1px solid var(--brd);
-           border-radius: 4px; padding: 10px; resize: none; outline: none; }
+           border-radius: 4px; padding: 10px; resize: none; outline: none;
+           min-width: 0; }
 textarea:focus { border-color: var(--acc); }
+textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; }
+
+/* Find/replace bar — slides down from the toolbar. */
+.findbar { display: none; padding: 8px 12px; background: var(--bg2);
+           border-bottom: 1px solid var(--brd);
+           grid-template-columns: 1fr 1fr auto auto auto auto auto;
+           gap: 6px; align-items: center; font-size: 12px; }
+.findbar.open { display: grid; }
+.findbar input[type=text] { background: var(--bg); color: var(--fg);
+                             border: 1px solid var(--brd); border-radius: 3px;
+                             padding: 4px 8px; font-family: var(--code); font-size: 12px;
+                             outline: none; }
+.findbar input[type=text]:focus { border-color: var(--acc); }
+.findbar button { background: var(--bg3); color: var(--fg); border: 1px solid var(--brd);
+                  border-radius: 3px; padding: 4px 9px; font-size: 11px; cursor: pointer; }
+.findbar button:hover { background: var(--acc2); }
+.findbar button.act { background: var(--acc); border-color: var(--acc); color: #fff; }
+.findbar .count { color: var(--fg2); font-size: 11px; padding: 0 4px; }
+
+/* Settings modal (folder paths). */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+            z-index: 100; align-items: center; justify-content: center; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--bg2); border: 1px solid var(--brd); border-radius: 6px;
+         padding: 18px; min-width: 460px; max-width: 600px; }
+.modal h3 { color: var(--acc); font-size: 13px; margin-bottom: 12px; }
+.modal .row { margin-bottom: 10px; }
+.modal .row label { display: block; font-size: 11px; color: var(--fg2);
+                    text-transform: uppercase; margin-bottom: 4px; }
+.modal .row input { width: 100%; padding: 6px 9px; background: var(--bg); color: var(--fg);
+                    border: 1px solid var(--brd); border-radius: 3px; font-family: var(--code);
+                    font-size: 12px; outline: none; }
+.modal .row .meta { color: var(--fg2); font-size: 10px; margin-top: 3px; }
+.modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.modal .actions button { padding: 5px 14px; border-radius: 3px; cursor: pointer;
+                         border: 1px solid var(--brd); background: var(--bg3); color: var(--fg);
+                         font-size: 12px; }
+.modal .actions button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+
+/* Cross-scenario search results panel. */
+.search-results { display: none; position: absolute; top: 50px; right: 16px;
+                  width: 480px; max-height: 60vh; overflow-y: auto;
+                  background: var(--bg2); border: 1px solid var(--brd); border-radius: 4px;
+                  z-index: 50; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+.search-results.open { display: block; }
+.search-results .hit { padding: 5px 8px; cursor: pointer; border-bottom: 1px solid var(--brd);
+                       font-size: 12px; }
+.search-results .hit:hover { background: var(--bg3); }
+.search-results .hit .where { color: var(--acc); font-family: var(--code); font-size: 10px; }
+.search-results .hit .ctx { color: var(--fg2); font-family: var(--code); font-size: 11px;
+                            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-results .hit .ctx b { color: var(--yel); background: rgba(240,192,64,.15); padding: 0 2px; }
+.search-results .empty { padding: 10px; color: var(--fg2); font-size: 12px; text-align: center; }
 .hint { font-size: 11px; color: var(--fg2); line-height: 1.5; }
 .hint code { background: var(--bg2); padding: 1px 5px; border-radius: 3px;
              color: var(--fg); font-family: var(--code); font-size: 11px; }
@@ -867,8 +1097,29 @@ textarea:focus { border-color: var(--acc); }
         <span class="label" id="savebadge-label">idle</span>
       </span>
       <span style="flex:1"></span>
-      <span class="hint">Autosave on edit · live preview</span>
+      <button onclick="toggleFindBar()" title="Find / replace (Ctrl+F)"
+              style="background:var(--bg3);color:var(--fg);border:1px solid var(--brd);
+                     border-radius:3px;padding:3px 9px;font-size:11px;cursor:pointer;">
+        🔍 Find
+      </button>
+      <button onclick="openSettings()" title="Folder settings"
+              style="background:var(--bg3);color:var(--fg);border:1px solid var(--brd);
+                     border-radius:3px;padding:3px 9px;font-size:11px;cursor:pointer;">
+        ⚙ Settings
+      </button>
     </div>
+    <div class="findbar" id="findbar">
+      <input id="find-q" type="text" placeholder="Find…"
+             onkeydown="if(event.key==='Enter'){event.shiftKey?findPrev():findNext()}; if(event.key==='Escape')toggleFindBar()">
+      <input id="find-r" type="text" placeholder="Replace with…">
+      <button id="find-case" onclick="toggleFindFlag('case', this)" title="Case-sensitive (Aa)">Aa</button>
+      <button id="find-regex" onclick="toggleFindFlag('regex', this)" title="Regex">.*</button>
+      <button onclick="findPrev()" title="Find previous (Shift+Enter)">◀</button>
+      <button onclick="findNext()" title="Find next (Enter)">▶</button>
+      <button onclick="replaceOne()" title="Replace one">Replace</button>
+      <span class="count" id="find-count"></span>
+    </div>
+    <div class="search-results" id="search-results"></div>
     <div class="panes" id="panes" style="display:none">
       <div class="preview">
         <div class="portrait-box">
@@ -879,17 +1130,60 @@ textarea:focus { border-color: var(--acc); }
         <img id="preview-img" alt="preview" />
       </div>
       <div class="text-area">
-        <label>BODY (control codes in brackets — preserved on save)</label>
-        <textarea id="body" spellcheck="false" placeholder="select an entry"></textarea>
-        <div class="hint">
-          Codes: <code>[FD]</code>=newline · <code>[FE]</code>=page break ·
-          <code>[F7:FF]</code>=end · <code>[FB:15]</code>=window ·
-          <code>[F8:01]</code>=speed · <code>[F9:XX]</code>=portrait ·
-          <code>[FC:01:02]</code>/<code>[FC:02:XX:YY]</code>=ctl
+        <div class="text-col">
+          <label><span id="lbl-editable">EN</span> BODY
+            <span style="color:var(--grn);font-size:9px;">editable</span></label>
+          <textarea id="body" spellcheck="false" placeholder="select an entry"></textarea>
+        </div>
+        <div class="text-col">
+          <label><span id="lbl-reference">JP</span> REFERENCE
+            <span class="ro">read-only</span></label>
+          <textarea id="jp-body" readonly spellcheck="false"
+                    placeholder="reference source not loaded"></textarea>
         </div>
       </div>
     </div>
     <div class="empty" id="empty">Pick a scenario → entry to start editing.</div>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal-bg" id="settings-modal">
+    <div class="modal">
+      <h3>Script folder settings</h3>
+      <div class="row">
+        <label>Editable folder (label: <span id="cfg-en-label">EN</span>)</label>
+        <div style="display:flex;gap:6px;">
+          <input id="cfg-en" type="text" placeholder="/path/to/data/en" style="flex:1">
+          <button onclick="browseFolder('en')"
+                  style="padding:6px 12px;background:var(--bg3);color:var(--fg);
+                         border:1px solid var(--brd);border-radius:3px;
+                         font-size:11px;cursor:pointer;">📁 Browse</button>
+        </div>
+        <div class="meta" id="cfg-en-meta"></div>
+      </div>
+      <div class="row">
+        <label>Reference folder (label: <span id="cfg-jp-label">JP</span>, read-only)</label>
+        <div style="display:flex;gap:6px;">
+          <input id="cfg-jp" type="text" placeholder="/path/to/data/jp" style="flex:1">
+          <button onclick="browseFolder('jp')"
+                  style="padding:6px 12px;background:var(--bg3);color:var(--fg);
+                         border:1px solid var(--brd);border-radius:3px;
+                         font-size:11px;cursor:pointer;">📁 Browse</button>
+        </div>
+        <div class="meta" id="cfg-jp-meta"></div>
+      </div>
+      <div class="meta" style="margin-top:8px;color:var(--fg2);font-size:10px;">
+        Labels in the editor (e.g. <span id="cfg-en-label2">EN</span> BODY /
+        <span id="cfg-jp-label2">JP</span> REFERENCE) are derived from each
+        folder's basename, uppercased. Use folder names like
+        <code style="background:var(--bg);padding:1px 4px;border-radius:2px;">data/fr/</code>
+        for a French translation, etc.
+      </div>
+      <div class="actions">
+        <button onclick="closeSettings()">Cancel</button>
+        <button class="primary" onclick="saveSettings()">Save &amp; reload</button>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -897,6 +1191,9 @@ let CURRENT = { scenario: null, entry_i: null };
 let DEBOUNCE = null;
 
 async function loadScenarios() {
+  // Apply current folder labels first so the textarea headers match the
+  // active folder pair from the very first frame.
+  await applyLabelsAtStartup();
   const items = await pywebview.api.list_scenarios();
   const list = document.getElementById('scen-list');
   list.innerHTML = '';
@@ -980,6 +1277,7 @@ async function selectEntry(i) {
   CURRENT.entry_i = i;
   const e = await pywebview.api.get_entry(CURRENT.scenario, i);
   document.getElementById('body').value = e.body;
+  document.getElementById('jp-body').value = e.jp_body || '';
   document.getElementById('preview-img').src = e.preview_png;
   const portraitBox = document.getElementById('portrait');
   const portraitPid = document.getElementById('portrait-pid');
@@ -1085,6 +1383,222 @@ document.addEventListener('keydown', e => {
 window.addEventListener('beforeunload', () => {
   pywebview.api.flush_now();
 });
+
+// ---- Find / replace ----
+const FIND_FLAGS = { case: false, regex: false };
+let FIND_RESULTS = [];     // [{scenario, entry_i, start, end, ...}]
+let FIND_INDEX = -1;       // current selection in FIND_RESULTS
+
+function toggleFindBar() {
+  const bar = document.getElementById('findbar');
+  bar.classList.toggle('open');
+  if (bar.classList.contains('open')) document.getElementById('find-q').focus();
+  else { hideSearchResults(); }
+}
+function toggleFindFlag(name, btn) {
+  FIND_FLAGS[name] = !FIND_FLAGS[name];
+  btn.classList.toggle('act', FIND_FLAGS[name]);
+  runSearch();  // rerun if query non-empty
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function showSearchResults(results, truncated) {
+  const panel = document.getElementById('search-results');
+  panel.innerHTML = '';
+  if (!results.length) {
+    panel.innerHTML = '<div class="empty">no matches</div>';
+    panel.classList.add('open');
+    return;
+  }
+  results.slice(0, 100).forEach((r, idx) => {
+    const div = document.createElement('div');
+    div.className = 'hit';
+    div.innerHTML = `
+      <div class="where">${r.scenario} · #${r.entry_i}</div>
+      <div class="ctx">…${escapeHtml(r.before)}<b>${escapeHtml(r.match)}</b>${escapeHtml(r.after)}…</div>`;
+    div.onclick = () => jumpToHit(idx);
+    panel.appendChild(div);
+  });
+  if (truncated) {
+    const note = document.createElement('div');
+    note.className = 'empty';
+    note.textContent = '(more matches not shown; refine query)';
+    panel.appendChild(note);
+  }
+  panel.classList.add('open');
+}
+function hideSearchResults() {
+  document.getElementById('search-results').classList.remove('open');
+}
+
+async function runSearch() {
+  const q = document.getElementById('find-q').value;
+  if (!q) { hideSearchResults(); FIND_RESULTS = []; FIND_INDEX = -1; updateFindCount(); return; }
+  const res = await pywebview.api.search_text(
+    q, FIND_FLAGS.case, FIND_FLAGS.regex,
+    'all', 'en',
+  );
+  if (res.error) {
+    document.getElementById('find-count').textContent = 'regex err';
+    return;
+  }
+  FIND_RESULTS = res.matches;
+  FIND_INDEX = -1;
+  showSearchResults(res.matches, res.truncated);
+  updateFindCount();
+}
+
+function updateFindCount() {
+  const el = document.getElementById('find-count');
+  if (!FIND_RESULTS.length) { el.textContent = ''; return; }
+  el.textContent = `${FIND_INDEX < 0 ? 0 : FIND_INDEX + 1} of ${FIND_RESULTS.length}`;
+}
+
+async function jumpToHit(idx) {
+  if (idx < 0 || idx >= FIND_RESULTS.length) return;
+  const hit = FIND_RESULTS[idx];
+  FIND_INDEX = idx;
+  if (CURRENT.scenario !== hit.scenario) {
+    await selectScenario(hit.scenario);
+  }
+  await selectEntry(hit.entry_i);
+  const ta = document.getElementById('body');
+  ta.focus();
+  ta.setSelectionRange(hit.start, hit.end);
+  // Scroll the selection into view
+  const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+  const before = ta.value.slice(0, hit.start);
+  const lineNum = (before.match(/\n/g) || []).length;
+  ta.scrollTop = Math.max(0, lineNum * lineHeight - 80);
+  // Dismiss the results panel once we've jumped — the user wants the
+  // textarea visible. They can re-open by editing the query.
+  hideSearchResults();
+  updateFindCount();
+}
+
+// Click-outside dismiss for the search-results panel. Listen on
+// `mousedown` (not `click`) so we close BEFORE any text selection
+// happens, which feels snappier.
+document.addEventListener('mousedown', (e) => {
+  const panel = document.getElementById('search-results');
+  if (!panel.classList.contains('open')) return;
+  // Keep the panel open if the click is inside it, inside the find-bar
+  // (the find-bar drives it), or on the Find toolbar button itself.
+  if (panel.contains(e.target)) return;
+  if (document.getElementById('findbar').contains(e.target)) return;
+  // The Find button has no id; match by its label text.
+  if (e.target.closest('button') && e.target.closest('button').textContent.includes('Find')) return;
+  hideSearchResults();
+});
+
+async function findNext() {
+  if (!FIND_RESULTS.length) { await runSearch(); }
+  if (!FIND_RESULTS.length) return;
+  jumpToHit((FIND_INDEX + 1) % FIND_RESULTS.length);
+}
+async function findPrev() {
+  if (!FIND_RESULTS.length) { await runSearch(); }
+  if (!FIND_RESULTS.length) return;
+  jumpToHit((FIND_INDEX - 1 + FIND_RESULTS.length) % FIND_RESULTS.length);
+}
+
+async function replaceOne() {
+  if (FIND_INDEX < 0 || !FIND_RESULTS.length) {
+    await findNext();
+    return;
+  }
+  const hit = FIND_RESULTS[FIND_INDEX];
+  const replacement = document.getElementById('find-r').value;
+  await pywebview.api.replace_text(hit.scenario, hit.entry_i, hit.start, hit.end, replacement);
+  // Refresh the entry in the editor — body changed
+  if (CURRENT.scenario === hit.scenario && CURRENT.entry_i === hit.entry_i) {
+    const e = await pywebview.api.get_entry(hit.scenario, hit.entry_i);
+    document.getElementById('body').value = e.body;
+    document.getElementById('preview-img').src = e.preview_png;
+  }
+  // Re-run the search (offsets shifted after replacement)
+  await runSearch();
+}
+
+// Debounced live search as user types in the query field
+let SEARCH_DEBOUNCE = null;
+document.getElementById('find-q').addEventListener('input', () => {
+  if (SEARCH_DEBOUNCE) clearTimeout(SEARCH_DEBOUNCE);
+  SEARCH_DEBOUNCE = setTimeout(runSearch, 200);
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    if (!document.getElementById('findbar').classList.contains('open')) toggleFindBar();
+    else document.getElementById('find-q').focus();
+  }
+});
+
+// ---- Settings modal ----
+function applyLabels(s) {
+  // Drive every "EN" / "JP" UI label from the folder basename so the editor
+  // generalizes to FR / ES / DE / KO / etc. without code changes.
+  document.getElementById('lbl-editable').textContent = s.editable_label;
+  document.getElementById('lbl-reference').textContent = s.reference_label;
+  // Mirror in the settings modal too.
+  document.getElementById('cfg-en-label').textContent = s.editable_label;
+  document.getElementById('cfg-jp-label').textContent = s.reference_label;
+  const l2a = document.getElementById('cfg-en-label2');
+  const l2b = document.getElementById('cfg-jp-label2');
+  if (l2a) l2a.textContent = s.editable_label;
+  if (l2b) l2b.textContent = s.reference_label;
+}
+
+async function openSettings() {
+  const s = await pywebview.api.get_settings();
+  document.getElementById('cfg-en').value = s.en_dir;
+  document.getElementById('cfg-jp').value = s.jp_dir;
+  document.getElementById('cfg-en-meta').textContent =
+    s.en_dir_exists ? `✓ exists  (default: ${s.default_en_dir})`
+                    : `⚠ folder not found  (default: ${s.default_en_dir})`;
+  document.getElementById('cfg-jp-meta').textContent =
+    s.jp_dir_exists ? `✓ exists  (default: ${s.default_jp_dir})`
+                    : `⚠ folder not found  (default: ${s.default_jp_dir})`;
+  applyLabels(s);
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
+
+async function browseFolder(which) {
+  const inputId = which === 'en' ? 'cfg-en' : 'cfg-jp';
+  const current = document.getElementById(inputId).value.trim();
+  const chosen = await pywebview.api.pick_folder(current);
+  if (chosen) {
+    document.getElementById(inputId).value = chosen;
+    // Update label preview live as the user picks
+    const tmp = chosen.replace(/\/+$/, '').split('/').pop().toUpperCase().slice(0, 8) || '—';
+    document.getElementById(which === 'en' ? 'cfg-en-label' : 'cfg-jp-label').textContent = tmp;
+    const l2 = document.getElementById(which === 'en' ? 'cfg-en-label2' : 'cfg-jp-label2');
+    if (l2) l2.textContent = tmp;
+  }
+}
+
+async function saveSettings() {
+  const en = document.getElementById('cfg-en').value.trim();
+  const jp = document.getElementById('cfg-jp').value.trim();
+  const s = await pywebview.api.set_settings(en, jp);
+  applyLabels(s);
+  closeSettings();
+  // Reload scenarios from new paths
+  await loadScenarios();
+}
+
+// On launch, apply labels once so the editor textareas show the right
+// pair (e.g. EN/JP, FR/JP, etc.) before any settings change.
+async function applyLabelsAtStartup() {
+  try {
+    const s = await pywebview.api.get_settings();
+    applyLabels(s);
+  } catch (e) { /* pywebview not ready yet — applyLabels will fire from loadScenarios */ }
+}
 
 window.addEventListener('pywebviewready', loadScenarios);
 </script></body></html>"""
