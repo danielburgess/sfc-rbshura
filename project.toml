@@ -73,13 +73,33 @@ file = "patches/24bit_ptrs.asm"
 kind = "asar"
 file = "patches/relocate_intro.asm"
 
-# 5. Tight intro tilemap — half-width (8x16) cells per char so PK Latin
-# glyphs render at their natural width. Kills TR/BR tilemap writes and
-# halves the per-char advance from $0010 → $0008. Mirrors what
-# patches/tight_renderer.asm did for the dialog box.
+# 5. Tight intro tilemap — DISABLED 2026-05-20: simple "NOP TR/BR + halve
+# advance" pattern that worked for the dialog box doesn't transfer to the
+# intro renderer. Patch left in patches/tight_intro.asm for reference.
+# [[rom.build.sections]]
+# kind = "asar"
+# file = "patches/tight_intro.asm"
+
+# 6. Convert intro typewriter → static (PK-style). rbshura's bank $1F has
+# 17 `JSL $80:D8E8` sites (the VBlank-wait routine Jaleco inserted on top
+# of PK's renderer) that produce the typewriter cadence. PK's same bank
+# region has zero of these calls. NOPping them removes the per-char wait
+# so all chars render in one frame. Risk: other side-effects of $80:D8E8
+# (audio/NMI yield) — narrow the set if anything else regresses.
 [[rom.build.sections]]
 kind = "asar"
-file = "patches/tight_intro.asm"
+file = "patches/intro_remove_delays.asm"
+
+# 7. Intro tile_num formula tweak — DISABLED 2026-05-20: misdiagnosed.
+# The intro renderer uses a SEPARATE font region in VRAM (likely uploaded
+# from a different ROM location) — the original JP intro font, untouched
+# by our PK-Latin patch. The `byte * 64` math was correct for that font;
+# changing it to `byte * 2` reads from even-wronger positions. The real
+# fix is to find where the intro font gets DMA'd to VRAM and replace it
+# with a PK-Latin layout that matches the existing tile_num math.
+# [[rom.build.sections]]
+# kind = "asar"
+# file = "patches/intro_tile_formula.asm"
 
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads
