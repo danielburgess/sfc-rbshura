@@ -1,37 +1,22 @@
 #!/usr/bin/env python3
-"""Apply Peacekeepers' Latin font to rbshura — TIGHT 8-px-per-char renderer.
+"""Regenerate fonts/rbshura_en.bin + tables/rbshura_en.tbl.
 
-OPTION B (true PK-style renderer):
-  Patches rbshura's renderer at PC $05839F so that each char takes a SINGLE
-  tile column (1 tile top, 1 tile bottom = 8x16 effective glyph) instead of
-  the original 2x2 layout (16x16). Lower stride means 32 chars per line at
-  the original tilemap geometry.
+The actual ROM insertion happens inside retrotool (project.toml ships
+fonts/rbshura_en.bin as a `kind="bin"` section at $100000 and applies
+the tight-8 renderer patch via `kind="asar"` on patches/tight_renderer.asm).
+This script just rebuilds the source artifacts:
 
-Three architectural changes vs vanilla rbshura (preserve byte count via NOPs):
-  1. DMA byte count: $40 (64B = 4 tiles) → $20 (32B = 2 tiles).
-     One-byte literal change at $0583D8.
-  2. Tilemap tail: 4 entries (TL/TR/BL/BR) → 2 entries (TL/BL).
-     5B NOP at $058403-$058407 kills `STA $001542,X` + the extra `INC A`
-     that was bumping the tile# for the BL entry (BL now needs tile+1 from
-     INC A at $058402, not tile+2).
-     5B NOP at $05840C-$058410 kills `INC A` + `STA $001582,X`.
-  3. Column / tile-slot advance: ×4 → ×2 per char.
-     6B NOP at $058417-$05841C kills 2 of the 4 `INC $1C4C` instructions.
-     6B NOP at $058423-$058428 kills 2 of the 4 `INC $1C58` instructions.
+  fonts/rbshura_en.bin    Peacekeepers' 8x16 Latin font (80 × 64-byte
+                          slots, bytes 0-31 = PK top+bottom tile, bytes
+                          32-63 = zero pad). CUSTOM_GLYPHS (e.g. '*' at
+                          0x4B) overlay specific slots. Sourced from
+                          peacekeepers.sfc.
+  tables/rbshura_en.tbl   Char ↔ byte map retrotool's encoder consumes
+                          when packing data/en/scenario_*.txt. Built from
+                          LATIN_MAP + ALIASES below; unmapped chars in
+                          EN scripts fall through to $00 (space).
 
-Font layout matches PK natively (32 bytes/glyph = top tile + bottom tile).
-We copy PK's font directly into rbshura's 64-byte slots: bytes 0-31 = PK
-glyph (top+bottom contiguous, which is PK's native format); bytes 32-63
-are zeroed for cleanliness (never DMA'd at the new $20 size).
-
-VRAM math (unchanged): VRAM_dest = $1C58 × 8 + $4000. With $1C58 += 2 per
-char and DMA = 16 words/char, char 0 → $4000-$400F, char 1 → $4010-$401F,
-etc — non-overlapping, 2 tiles per char.
-
-Tilemap math (now 1-column-per-char):
-  TL = tile# $1C58 at $1540,X
-  BL = tile# $1C58 + 1 at $1580,X
-  X = $1C4C, $1C4C += 2 per char → next char goes 1 tile column right.
+Re-run after editing LATIN_MAP, ALIASES, or CUSTOM_GLYPHS.
 """
 from __future__ import annotations
 
@@ -40,39 +25,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 PK_ROM = ROOT / "peacekeepers.sfc"
-JP_ROM = ROOT / "rbshura.sfc"
-OUT_ROM = ROOT / "rbshura_pkfont.sfc"
+FONT_BIN = ROOT / "fonts" / "rbshura_en.bin"
 
-FONT_PC = 0x100000
 PK_CHAR_BYTES = 32          # PK native: 8x16 glyph = top tile + bottom tile
-JP_CHAR_BYTES = 64          # rbshura slot stride
+JP_CHAR_BYTES = 64          # rbshura slot stride (only first 32B DMA'd
+                            # after the tight-8 renderer patch)
 N_GLYPHS = 80               # cover PK chars $00-$4F
 PK_FONT_BYTES = N_GLYPHS * PK_CHAR_BYTES
-JP_FONT_BYTES = N_GLYPHS * JP_CHAR_BYTES
-
-# Renderer patch sites (PC offsets in rbshura.sfc)
-RENDERER_START = 0x05839F
-RENDERER_END = 0x058430  # one past last byte of the renderer body
-
-# Sanity: the renderer must match the vanilla bytes we disassembled.
-# If this fails after a future ROM edit, the patch sites moved.
-VANILLA_RENDERER_HEAD = bytes([
-    0xC2, 0x30,                       # REP #$30
-    0xAC, 0x22, 0x0F,                 # LDY $0F22
-    0xA9, 0x80, 0x00,                 # LDA #$0080
-    0x99, 0x22, 0x0E,                 # STA $0E22,Y
-])
-
-# DMA byte-count literal site
-DMA_SIZE_LITERAL_PC = 0x0583D8        # byte after the LDA opcode
-
-# Tilemap NOP sites (start_pc, length)
-NOP_SITES = [
-    (0x058403, 5),   # STA $001542,X + the bridging INC A
-    (0x05840C, 5),   # INC A + STA $001582,X
-    (0x058417, 6),   # 2× INC $1C4C
-    (0x058423, 6),   # 2× INC $1C58
-]
+FONT_BIN_BYTES = N_GLYPHS * JP_CHAR_BYTES   # 5120 — matches retrotool bin section
 
 
 LATIN_MAP: dict[int, str] = {
@@ -157,50 +117,28 @@ def _unmapped_chars_in_en_scripts() -> list[str]:
     return list(found.keys())
 
 
-def patch_font(jp_rom: bytes, pk_rom: bytes) -> bytes:
-    """Copy PK 32B glyphs into the first 32B of each rbshura 64B slot.
-    Bytes 32-63 of each slot are zeroed (never DMA'd at the new size).
-    After the bulk copy, overlay any CUSTOM_GLYPHS (e.g. '!' at 0x4B) so
-    chars missing from the PK source still have a usable rendering."""
-    out = bytearray(jp_rom)
+def build_font_bin(pk_rom: bytes) -> bytes:
+    """Produce the 5120B font blob retrotool inserts at $100000.
+
+    Layout: 80 × 64B slots. Bytes 0-31 of each slot = PK 32B glyph
+    (top tile + bottom tile, native PK ordering). Bytes 32-63 = zero
+    pad (never DMA'd at the post-patch $20 size). CUSTOM_GLYPHS overlay
+    specific slots after the bulk PK copy.
+    """
+    out = bytearray(FONT_BIN_BYTES)
     for n in range(N_GLYPHS):
-        pk_off = FONT_PC + n * PK_CHAR_BYTES
-        jp_off = FONT_PC + n * JP_CHAR_BYTES
+        pk_off = 0x100000 + n * PK_CHAR_BYTES
+        jp_off = n * JP_CHAR_BYTES
         out[jp_off:jp_off + 32] = pk_rom[pk_off:pk_off + 32]
-        out[jp_off + 32:jp_off + 64] = b'\x00' * 32
+        # bytes 32-63 already zero from bytearray()
     for slot, glyph in CUSTOM_GLYPHS.items():
         if len(glyph) != 32:
             raise SystemExit(
                 f"CUSTOM_GLYPHS[0x{slot:02X}] must be exactly 32 bytes "
                 f"(got {len(glyph)})"
             )
-        jp_off = FONT_PC + slot * JP_CHAR_BYTES
+        jp_off = slot * JP_CHAR_BYTES
         out[jp_off:jp_off + 32] = glyph
-    return bytes(out)
-
-
-def patch_renderer(rom: bytes) -> bytes:
-    """Apply the tight-8 renderer patch in-place (byte-count preserving)."""
-    # Verify the renderer head matches vanilla — guards against patching
-    # an already-patched ROM or a different ROM.
-    if rom[RENDERER_START:RENDERER_START + len(VANILLA_RENDERER_HEAD)] != VANILLA_RENDERER_HEAD:
-        raise SystemExit(
-            f"Renderer head at ${RENDERER_START:06X} does not match vanilla. "
-            f"Aborting to avoid double-patching."
-        )
-
-    out = bytearray(rom)
-
-    # 1. DMA byte count $40 → $20.
-    assert out[DMA_SIZE_LITERAL_PC - 1] == 0xA9, "expected LDA #imm at DMA size site"
-    assert out[DMA_SIZE_LITERAL_PC] == 0x40, "expected $40 at DMA size literal"
-    assert out[DMA_SIZE_LITERAL_PC + 1] == 0x00, "expected $00 hi byte at DMA size literal"
-    out[DMA_SIZE_LITERAL_PC] = 0x20
-
-    # 2-3. NOP out the deleted bytes (kill TR/BR tilemap writes + extra advances).
-    for start, length in NOP_SITES:
-        out[start:start + length] = b'\xEA' * length
-
     return bytes(out)
 
 
@@ -240,72 +178,31 @@ def write_en_table(path: Path) -> None:
     print(f"  → table has {len(LATIN_MAP)} primary + {len(ALIASES)} aliases + {len(unmapped)} unmapped→space")
 
 
-def inspect() -> None:
-    pk = PK_ROM.read_bytes()
-    print(f"PK font: $100000-${FONT_PC + PK_FONT_BYTES - 1:06X}")
-    print(f"  ({PK_FONT_BYTES}B, {N_GLYPHS}×{PK_CHAR_BYTES}B 8x16 glyphs)")
-    print(f"\nTight-8 layout (matches PK natively):")
-    print(f"  bytes  0-15 = PK top tile (DMA'd as char's top row tile)")
-    print(f"  bytes 16-31 = PK bottom tile (DMA'd as char's bottom row tile)")
-    print(f"  bytes 32-63 = ZEROED (never DMA'd, slot stride still 64)")
-
-
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--inspect", action="store_true")
-    args = ap.parse_args()
-
-    if args.inspect:
-        inspect()
-        return
+    argparse.ArgumentParser().parse_args()  # accept --help; no flags
 
     pk = PK_ROM.read_bytes()
-    jp = JP_ROM.read_bytes()
+    font_bin = build_font_bin(pk)
 
-    # 1. Font swap.
-    out_bytes = patch_font(jp, pk)
-    # 2. Renderer patch (tight-8).
-    out_bytes = patch_renderer(out_bytes)
-    OUT_ROM.write_bytes(out_bytes)
+    # Sanity: per-slot bytes match the PK source (or the CUSTOM_GLYPHS
+    # overlay), and the pad region is zero.
+    for n in range(N_GLYPHS):
+        pk_off = 0x100000 + n * PK_CHAR_BYTES
+        jp_off = n * JP_CHAR_BYTES
+        if n in CUSTOM_GLYPHS:
+            assert font_bin[jp_off:jp_off + 32] == CUSTOM_GLYPHS[n], f"slot {n} custom glyph mismatch"
+        else:
+            assert font_bin[jp_off:jp_off + 32] == pk[pk_off:pk_off + 32], f"slot {n} top+bot"
+        assert font_bin[jp_off + 32:jp_off + 64] == b'\x00' * 32, f"slot {n} pad zeros"
+
+    FONT_BIN.parent.mkdir(parents=True, exist_ok=True)
+    FONT_BIN.write_bytes(font_bin)
+    print(f"Wrote {FONT_BIN.relative_to(ROOT)} ({len(font_bin)} bytes, "
+          f"{N_GLYPHS} slots, {len(CUSTOM_GLYPHS)} custom glyphs)")
 
     en_table_path = ROOT / "tables" / "rbshura_en.tbl"
     write_en_table(en_table_path)
-
-    # Sanity: only font region + renderer slot changed.
-    expected = bytearray(jp)
-    expected[FONT_PC:FONT_PC + JP_FONT_BYTES] = out_bytes[FONT_PC:FONT_PC + JP_FONT_BYTES]
-    expected[RENDERER_START:RENDERER_END] = out_bytes[RENDERER_START:RENDERER_END]
-    assert bytes(expected) == out_bytes, "patch corrupted bytes outside font + renderer regions!"
-
-    # Verify font padding. Slots in CUSTOM_GLYPHS are intentionally
-    # different from the PK source (they hold our hand-drawn glyphs);
-    # check those against the custom bytes instead.
-    for n in range(N_GLYPHS):
-        pk_off = FONT_PC + n * PK_CHAR_BYTES
-        jp_off = FONT_PC + n * JP_CHAR_BYTES
-        if n in CUSTOM_GLYPHS:
-            assert out_bytes[jp_off:jp_off + 32] == CUSTOM_GLYPHS[n], f"slot {n} custom glyph mismatch"
-        else:
-            assert out_bytes[jp_off:jp_off + 32] == pk[pk_off:pk_off + 32], f"slot {n} top+bot"
-        assert out_bytes[jp_off + 32:jp_off + 64] == b'\x00' * 32, f"slot {n} pad zeros"
-
-    # Verify renderer patches landed.
-    assert out_bytes[DMA_SIZE_LITERAL_PC] == 0x20, "DMA size patch missing"
-    for start, length in NOP_SITES:
-        assert out_bytes[start:start + length] == b'\xEA' * length, f"NOP site ${start:06X} missing"
-
-    print(f"Wrote {OUT_ROM} ({len(out_bytes)} bytes)")
-    print(f"Wrote {en_table_path}")
-    print()
-    print("Renderer patches applied:")
-    print(f"  ${DMA_SIZE_LITERAL_PC:06X}: DMA size $40 → $20 (32 bytes / 2 tiles per char)")
-    for start, length in NOP_SITES:
-        print(f"  ${start:06X}: NOPed {length} bytes")
-    print()
-    print("Expected behavior in emulator:")
-    print(f"  Each Latin char now takes a single tile column (8 px wide).")
-    print(f"  Top tile in row 0, bottom tile in row 1, same column.")
-    print(f"  32 chars per line instead of 16.")
+    print(f"Wrote {en_table_path.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

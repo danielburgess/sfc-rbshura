@@ -5,30 +5,23 @@ en_data_dir = "data/en"
 
 [rom]
 name = "rbshura"
-# Source ROM for build. Includes:
-#   1. PK Latin font patch (commit e539fbd, font glyphs in source area).
-#   2. 24-bit pointer engine patch (patches/24bit_ptrs.asm) — converts
-#      the L4 string-pointer dereference to read 3-byte entries so EN
-#      text can be placed in any ROM bank from the freespace pool. Stub
-#      lives at SNES $C8:7000..$C8:7030 (file $087000..$087030).
-# Rebuild with:
-#   python3 -c "from retrotool.asm import AsarPatch, apply_patch; ..."
-# applying patches/24bit_ptrs.asm to rbshura_pkfont.sfc → this file.
-file = "rbshura_pkfont_24bit.sfc"
+# Pristine JP source. Every transformation that turns it into the EN ROM
+# (PK font, tight renderer, 24-bit pointer engine, char_names, 14 scenarios)
+# is expressed below as a [[rom.build.sections]] entry. The build is one
+# retrotool `build_project()` call — no Python pre-steps.
+file = "rbshura.sfc"
 mapping = "hirom"
-# Expanded from 2M → 4M on 2026-05-17 so all 14 scenarios' 24-bit-ptr EN
-# text fits in freespace without scavenging in-ROM gaps. HiROM addresses
-# up to 4 MB via banks $C0-$FF (file 0-$3FFFFF). New banks $E0-$FF
-# (file $200000-$3FFFFF) are pristine and form the bulk of the freespace
-# pool.
+# Expanded from 2 MB → 4 MB. HiROM addresses banks $C0-$FF (file 0..$3FFFFF).
+# Banks $E0-$FF (file $200000..$3FFFFF) are pristine expansion space and
+# form the bulk of the freespace pool.
 size = "4M"
 
 [rom.build]
 # Freespace for relocate-mode 24-bit-ptr allocation. The bump allocator
 # walks ranges in declaration order; the in-ROM-gap entries come first so
-# small holes get filled before we eat into the expansion bank.
-# The bank $08 range starts at $087080, skipping the 24-bit engine stub
-# at $087000..$087030 (plus ~80 byte safety margin).
+# small holes get filled before we eat into the expansion bank. The
+# bank $08 range starts at $087080, skipping the 24-bit engine stub at
+# $087000..$087030 (plus ~80B safety margin).
 freespace = [
     ["$1A9CF3", "$1AC003"],   # bank $1A: 8977 B (largest in-ROM run)
     ["$087080", "$088000"],   # bank $08: 3968 B (after 24-bit ptr engine stub)
@@ -40,8 +33,63 @@ freespace = [
     ["$0975DA", "$097A1B"],   # bank $09: 1089 B
     # Expansion banks $E0-$FF: 2 MB pristine pool. Used after in-ROM space
     # is exhausted. Plenty of headroom for future EN content / patches.
-    ["$200000", "$400000"],   # banks $E0-$FF: 2 MB
+    # SPLIT around the relocated intro region (file $20:C8F1..$20:D01E,
+    # 1838 B reserved for intro_part1 + intro_part2 — see tables/intro.toml
+    # and patches/relocate_intro.asm). Allocator skips the reserved hole.
+    ["$200000", "$20C8F1"],   # $E0:0000..$E0:C8F0
+    ["$20D01F", "$400000"],   # $E0:D01F..$FF:FFFF
 ]
+
+# ---- Inline sections: font + engine patches ----
+# Run before any DataDef section (declaration order = build order). The
+# scenario / char_names DataDefs from tables/*.toml are appended after.
+
+# 1. PK Latin font (8×16, 80 glyphs × 64B slots = 5120B at $100000).
+# bytes 0..31 of each slot = PK top tile + bottom tile.
+# bytes 32..63 of each slot = zero pad (never DMA'd at the tight $20 size).
+# Custom glyphs ('*' at 0x4B etc.) are baked into the binary; regenerate
+# via tools/build_en_font.py if charmap / CUSTOM_GLYPHS change.
+[[rom.build.sections]]
+kind = "bin"
+file = "fonts/rbshura_en.bin"
+offset = "$100000"
+
+# 2. Tight-8 renderer patch — single-tile-column per char, 32 chars/line.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/tight_renderer.asm"
+
+# 3. 24-bit pointer engine — widens L4 deref to 24-bit + flips B1→B7 char
+# reads + JSL stub at $C87000 + ROM-size byte $00:FFD7 = $0F.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/24bit_ptrs.asm"
+
+# 4. Intro relocation — change story-screen renderer DBR from $DF to $E0
+# so the intro text reads from bank $E0 (expansion freespace) instead of
+# bank $1F (where it sat in the JP source). tables/intro.toml writes the
+# encoded EN/JP text into the new location at $E0:C8F1 / $E0:CD35.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/relocate_intro.asm"
+
+# 5. Tight intro tilemap — half-width (8x16) cells per char so PK Latin
+# glyphs render at their natural width. Kills TR/BR tilemap writes and
+# halves the per-char advance from $0010 → $0008. Mirrors what
+# patches/tight_renderer.asm did for the dialog box.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/tight_intro.asm"
+
+# Intro narrative is now a DataDef at tables/intro.toml (fixed-records
+# encoding) instead of an inline pre-encoded bin section. Retrotool reads
+# data/{en,jp}/intro.txt + tables/rbshura_en.tbl and encodes at build time.
+#
+# Scenario 28 (engine ending — WRAM-resident L4 table). ROM source bytes
+# are at $18F482 but the engine applies a ROM→WRAM transformation
+# (inserts/strips FF bytes at specific positions) we haven't fully RE'd.
+# Insertion stays deferred — see docs/scenario_28.toml and
+# memory/project_wram_resident_scenarios.md.
 
 [extract]
 default_lang = "jp"

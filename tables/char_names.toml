@@ -1,0 +1,28 @@
+# Top-level scalars must precede any [section] header in TOML, otherwise
+# they get folded into the previous table. The fixed-records resolver
+# reads `entries`/`block_len`/`fields` from DataDef.extras, which is
+# everything that ISN'T table/encoding/pointers/data/relocation/section.
+entries = 32
+block_len = 12
+fields = [
+    { label = "name", start = 0, len = 11, fill = 0x20 },
+]
+
+[table]
+name = "char_names"
+type = "fixed"
+
+[encoding]
+# HUD font is raw ASCII (D=0x44), not the PK dialog font. ascii.tbl is
+# the identity map retrotool's encoder uses.
+table_file = "tables/ascii.tbl"
+terminator = 0xFF
+
+[data]
+# PC $00E15B..$00E2DB (exclusive). end= isn't load-bearing for fixed —
+# stride*count gives the true extent — but it documents the region.
+offset = "$00E15B"
+end = "$00E2DB"
+
+[section]
+kind = "fixed-records"

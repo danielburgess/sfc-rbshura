@@ -1,0 +1,45 @@
+# Intro narrative — two FF-terminated text blocks the story renderer at
+# $05:F010 reads directly from ROM (no pointer table). Retrotool treats
+# the whole region as one 1838-byte fixed record with two named fields,
+# matched to the `<<$1FC8F1:0.partN>>` headers in data/{lang}/intro.txt.
+#
+# Encoding uses tables/rbshura_en.tbl (or whichever language table is
+# active for the editable folder). The intro renderer reads bytes
+# directly and dispatches FE XX as a 2-byte kanji escape — if the user
+# leaves residual JP / kanji characters in their translation, those need
+# either an English replacement or a raw-byte form like `[20]` for layout
+# spacing.
+#
+# Byte budgets enforced by `len`:
+#   part1  $1FC8F1..$1FCD34 = 1092 B  (Cyber-Clone Incident backstory)
+#   part2  $1FCD35..$1FD01E =  746 B  (Maria Norton narration)
+# Encoder errors out if either field overflows.
+
+entries = 1
+block_len = 1838
+fields = [
+    { label = "part1", start = 0,    len = 1092, fill = 0x00 },
+    { label = "part2", start = 1092, len = 746,  fill = 0x00 },
+]
+
+[table]
+name = "intro"
+type = "fixed"
+
+[encoding]
+table_file = "tables/rbshura_en.tbl"
+terminator = 0xFF
+
+[data]
+# RELOCATED 2026-05-20 to bank $E0 (expansion-bank freespace) so the
+# intro text doesn't share space with bank $1F's event-script data.
+# patches/relocate_intro.asm flips the renderer's hardcoded DBR from
+# $DF (HiROM mirror of $1F) to $E0, so reads land here instead of the
+# original $1F:C8F1 / $1F:CD35. Same low-16 offsets within the bank.
+#
+# File offsets ($1F:C8F1 → $E0:C8F1 = file $20:C8F1).
+offset = "$20C8F1"
+end = "$20D01F"
+
+[section]
+kind = "fixed-records"

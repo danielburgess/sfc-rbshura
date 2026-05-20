@@ -48,19 +48,52 @@ EDITOR_STATE_PATH = ROOT / ".editor-state.json"
 # may be overridden via set_settings().
 EN_DATA_DIR = DEFAULT_EN_DATA_DIR
 
-# Source-of-truth ROM for the font preview. Must be patched with the PK font
-# + half-width renderer (apply_pk_font.py) so the bytes at FONT_PC match
-# what the in-game renderer actually DMAs to VRAM. We prefer the
-# fully-built EN ROM (rbshura_en_24bit.sfc) because it ships in the user's
-# tested build, falling back to rbshura_pkfont_24bit.sfc / rbshura_pkfont.sfc.
+# Source-of-truth font for the preview is fonts/rbshura_en.bin — the same
+# binary the retrotool build pastes into the ROM at $100000. The editor reads
+# it directly so the preview reflects the current font without needing a full
+# build to land. Palettes still come from the ROM (extracted from $058313).
+FONT_BIN_PATH = ROOT / "fonts" / "rbshura_en.bin"
 ROM_CANDIDATES = [
     ROOT / "rbshura_en_24bit.sfc",
     ROOT / "rbshura_pkfont_24bit.sfc",
     ROOT / "rbshura_pkfont.sfc",
 ]
-FONT_PC = 0x100000
-FONT_SLOT_STRIDE = 64        # rbshura's per-glyph slot in ROM
-FONT_GLYPH_COUNT = 247       # $00..$F6
+FONT_PC = 0x100000           # absolute ROM offset (kept for reference / extract logic)
+FONT_SLOT_STRIDE = 64        # rbshura's per-glyph slot
+FONT_GLYPH_COUNT = 80        # PK Latin range $00..$4F — what the bin covers
+
+# Kanji font (intro renderer's FE-escape table). 256 × 64 B = 16 KB at ROM
+# $104000. Each glyph is 16x16 = 4 tiles in TL/TR/BL/BR order. See
+# tables/intro_kanji.tbl for the byte→char mapping.
+KANJI_FONT_OFFSET = 0x104000
+KANJI_GLYPH_COUNT = 256
+
+# Per-file rendering config. Files not listed default to dialog rendering
+# (24 cols, FE=1-byte page break, in-game dialog box compositing).
+SCENARIO_CONFIG: dict[str, dict] = {
+    "intro": {
+        # `cols_per_line` is in HALF-CELL UNITS (one 8-px tile column) so
+        # the wrap math works for mixed half-width/full-width content:
+        #   * Half-width glyph (Latin / dialog kana, 8 px wide) = 1 unit
+        #   * Full-width glyph (kanji, 16 px wide)              = 2 units
+        # 32 units = 256 px = SNES screen width, matching the in-game
+        # intro renderer's pixel-wrap behavior.
+        "cols_per_line": 32,
+        # In the intro encoding, FE XX is a 2-byte kanji escape (XX
+        # indexes the kanji font at $104000). The dialog engine treats
+        # FE as a 1-byte page break — this flag flips the parse.
+        "kanji_escape": True,
+        # Render half-width and full-width glyphs at their natural pixel
+        # widths instead of forcing every cell to 16 px. Lets Latin
+        # translations stay legible (without 2× horizontal stretching)
+        # and matches how the in-game intro lays out text.
+        "mixed_width": True,
+        # Intro is full-screen on a dark backdrop, not a bordered dialog
+        # box. We still draw a thin frame around the preview for
+        # legibility but skip the speaker-palette compositing.
+        "dialog_box": False,
+    },
+}
 
 # Half-width font geometry (matches apply_pk_font.py / the in-game renderer)
 GLYPH_W = 8
@@ -165,28 +198,24 @@ def load_portrait_palettes(rom_bytes: bytes, n_portraits: int = 16) -> list[list
 
 
 def _build_atlas_for_palette(
-    rom: bytes, palette: list[tuple[int, int, int, int]]
+    font_buf: bytes, palette: list[tuple[int, int, int, int]]
 ) -> Image.Image:
-    """Decode the half-width font from `rom` using the given 4-color palette.
-
-    Pixel value 0 (palette[0]) is rendered transparent so the underlying
-    dialog backdrop shows through — _draw_dialog_box fills that area with
-    palette[0] separately. Values 1-3 take the speaker's outline/mid/bright
-    colors.
+    """Decode the half-width font from `font_buf` (fonts/rbshura_en.bin
+    layout: 80 × 64B slots, top tile + bottom tile in the first 32B of each).
+    `palette` is the 4-color speaker palette; pixel value 0 is rendered
+    transparent so the dialog backdrop shows through (palette[0] is filled
+    separately by _draw_dialog_box).
     """
     cols = 16
     rows = (FONT_GLYPH_COUNT + cols - 1) // cols
     atlas = Image.new("RGBA", (cols * GLYPH_W, rows * GLYPH_H), (0, 0, 0, 0))
-    # Slot 0 is the dialog backdrop — render glyph pixel value 0 as transparent
-    # so the per-page dialog box's own backdrop fill shows through (cleaner
-    # compositing for letters with internal "holes").
     render_pal = [(0, 0, 0, 0)] + palette[1:]
     for gi in range(FONT_GLYPH_COUNT):
-        base = FONT_PC + gi * FONT_SLOT_STRIDE
-        if base + BYTES_PER_GLYPH > len(rom):
+        base = gi * FONT_SLOT_STRIDE
+        if base + BYTES_PER_GLYPH > len(font_buf):
             break
-        top = _decode_tile_2bpp(rom, base)
-        bot = _decode_tile_2bpp(rom, base + TILE_BYTES)
+        top = _decode_tile_2bpp(font_buf, base)
+        bot = _decode_tile_2bpp(font_buf, base + TILE_BYTES)
         gx = (gi % cols) * GLYPH_W
         gy = (gi // cols) * GLYPH_H
         for py in range(8):
@@ -196,21 +225,64 @@ def _build_atlas_for_palette(
     return atlas
 
 
-def load_font_atlases() -> tuple[bytes, list[list[tuple[int, int, int, int]]], dict[int, Image.Image]]:
-    """Load ROM + extract palettes + pre-render one atlas per speaker.
+# Each kanji glyph is rendered at 16×16 (4 × 8×8 tiles), distinct from the
+# half-width kana glyph (8×16) used by the dialog font.
+KANJI_W = KANJI_H = 16
 
-    Returns (rom_bytes, palettes, atlas_by_portrait_id). Atlas building is
-    eager because there are only ~16 portraits and each atlas is ~64 KB —
-    cheap to cache, and per-glyph render is then a fast crop+paste.
+
+def _build_kanji_atlas(rom: bytes, palette: list[tuple[int, int, int, int]]) -> Image.Image:
+    """Decode the FE-escape kanji font from ROM at $104000 into a 16×16-cells
+    grid atlas. Each glyph is 4 × 16 B 2bpp tiles in TL/TR/BL/BR order; the
+    atlas is laid out 16 columns wide (so kanji byte index N → atlas cell
+    (N%16, N//16))."""
+    cols = 16
+    rows = (KANJI_GLYPH_COUNT + cols - 1) // cols
+    atlas = Image.new("RGBA",
+                      (cols * KANJI_W, rows * KANJI_H),
+                      (0, 0, 0, 0))
+    render_pal = [(0, 0, 0, 0)] + palette[1:]
+    base = KANJI_FONT_OFFSET
+    for gi in range(KANJI_GLYPH_COUNT):
+        off = base + gi * 64    # 4 tiles × 16 B
+        if off + 64 > len(rom):
+            break
+        tl = _decode_tile_2bpp(rom, off)
+        tr = _decode_tile_2bpp(rom, off + 16)
+        bl = _decode_tile_2bpp(rom, off + 32)
+        br = _decode_tile_2bpp(rom, off + 48)
+        gx = (gi % cols) * KANJI_W
+        gy = (gi // cols) * KANJI_H
+        for py in range(8):
+            for px in range(8):
+                atlas.putpixel((gx + px,     gy + py),     render_pal[tl[py * 8 + px]])
+                atlas.putpixel((gx + 8 + px, gy + py),     render_pal[tr[py * 8 + px]])
+                atlas.putpixel((gx + px,     gy + 8 + py), render_pal[bl[py * 8 + px]])
+                atlas.putpixel((gx + 8 + px, gy + 8 + py), render_pal[br[py * 8 + px]])
+    return atlas
+
+
+def load_font_atlases() -> tuple[bytes, list[list[tuple[int, int, int, int]]], dict[int, Image.Image]]:
+    """Load font bin + extract palettes from ROM + pre-render one atlas per
+    speaker.
+
+    Returns (rom_bytes, palettes, atlas_by_portrait_id). rom_bytes is kept
+    in the tuple for callers that still need ROM data (palette extraction,
+    etc.) — font tiles themselves come from fonts/rbshura_en.bin.
     """
     rom_path = _pick_rom()
-    print(f"  font source: {rom_path.name}")
+    if not FONT_BIN_PATH.exists():
+        raise FileNotFoundError(
+            f"{FONT_BIN_PATH} missing — regenerate with `python apply_pk_font.py`"
+        )
+    print(f"  font source:    {FONT_BIN_PATH.name}")
+    print(f"  palette source: {rom_path.name}")
+    font_buf = FONT_BIN_PATH.read_bytes()
     rom = rom_path.read_bytes()
     palettes = load_portrait_palettes(rom)
     print(f"  extracted {len(palettes)} per-portrait palettes from ${PALETTE_TABLE_PC:06X}")
     atlases: dict[int, Image.Image] = {}
     for pid, pal in enumerate(palettes):
-        atlases[pid] = _build_atlas_for_palette(rom, pal)
+        atlases[pid] = _build_atlas_for_palette(font_buf, pal)
     return rom, palettes, atlases
 
 
@@ -218,15 +290,74 @@ def load_font_atlases() -> tuple[bytes, list[list[tuple[int, int, int, int]]], d
 # palette as a default neutral atlas.
 def load_font_atlas() -> Image.Image:
     rom_path = _pick_rom()
-    print(f"  font source: {rom_path.name}")
-    rom = rom_path.read_bytes()
-    palettes = load_portrait_palettes(rom)
-    return _build_atlas_for_palette(rom, palettes[0] if palettes else FALLBACK_PALETTE)
+    font_buf = FONT_BIN_PATH.read_bytes()
+    palettes = load_portrait_palettes(rom_path.read_bytes())
+    return _build_atlas_for_palette(font_buf, palettes[0] if palettes else FALLBACK_PALETTE)
 
 
 # ---------------------------------------------------------------------------
 # rbshura_en.tbl — char ↔ byte mapping
 # ---------------------------------------------------------------------------
+
+def _load_jp_kana_table() -> dict[str, int]:
+    """Parse tables/rbshura_jp.tbl into a {char: byte} reverse map.
+
+    Used as a fallback in `body_to_lines` when the primary EN table doesn't
+    know a character — lets us preview JP source files (with kana literals
+    like サイバークローン) without showing them as blank cells.
+    """
+    path = ROOT / "tables" / "rbshura_jp.tbl"
+    out: dict[str, int] = {}
+    if not path.exists():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split(";", 1)[0].strip()
+        if not line or "=" not in line or line.startswith("@"):
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        if len(k) != 2:
+            continue
+        try:
+            byte = int(k, 16)
+        except ValueError:
+            continue
+        if v and v not in out:
+            out[v] = byte
+    return out
+
+
+def _load_kanji_table() -> dict[str, int]:
+    """Parse tables/intro_kanji.tbl into a {kanji_char: byte_xx} map.
+
+    The intro renderer encodes kanji as `FE XX` where XX indexes the kanji
+    font at $104000. This reverse table lets us look up a kanji char back to
+    its XX byte when rendering edited intro text.
+    """
+    path = ROOT / "tables" / "intro_kanji.tbl"
+    out: dict[str, int] = {}
+    if not path.exists():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        # Strip inline `;` comments + whitespace.
+        line = line.split(";", 1)[0].strip()
+        if not line or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip()
+        if len(k) != 2:
+            continue
+        try:
+            byte = int(k, 16)
+        except ValueError:
+            continue
+        # First mapping wins (so AE=義 stays even if user later edits and
+        # confuses the parser with a duplicate).
+        if v and v not in out:
+            out[v] = byte
+    return out
+
 
 def load_table() -> dict[str, int]:
     """Parse tables/rbshura_en.tbl into a {char: byte_value} map for EN text.
@@ -266,49 +397,44 @@ def load_table() -> dict[str, int]:
 # Scenario file model
 # ---------------------------------------------------------------------------
 
-ENTRY_HEADER_RE = re.compile(r"<<\$(\d+):(\d+)\[\$(\d+)\]>>")
+# Two header forms in play:
+#   * Pointer-table scripts (scenario_NN.txt) — `<<$DEC:idx[$DEC]>>`
+#   * Fixed-records DataDefs (char_names.txt) — `<<$HEX:idx.label>>`
+# Both share `<<$ANY:idx <suffix> >>`. We keep the suffix in the trailer
+# group and replay the original header verbatim on save so each file
+# round-trips to the form its handler expects.
+ENTRY_HEADER_RE = re.compile(r"<<\$([0-9A-Fa-f]+):(\d+)(\[\$\d+\]|\.\w+)>>")
 
 
 class Scenario:
-    """One scenario_NN.txt — list of (header_dec, idx, body) entries."""
+    """One scenario_NN.txt — list of (header, idx, body) entries."""
     def __init__(self, path: Path):
         self.path = path
         self.raw: str = ""
-        self.entries: list[dict] = []  # each: {idx, ptr_dec, body_dec, body}
+        self.entries: list[dict] = []  # each: {header, idx, body}
         self.reload()
 
     def reload(self) -> None:
         self.raw = self.path.read_text(encoding="utf-16")
         self.entries = []
-        # Split into chunks: header line + body until next header
-        # Pattern: <<$DEC:DEC[$DEC]>>\nbody\n
-        parts = re.split(r"(<<\$\d+:\d+\[\$\d+\]>>)\n", self.raw)
-        # parts[0] is any text before the first header (usually empty)
+        parts = re.split(r"(<<\$[0-9A-Fa-f]+:\d+(?:\[\$\d+\]|\.\w+)>>)\n", self.raw)
         for i in range(1, len(parts), 2):
             header = parts[i]
             body = parts[i + 1] if i + 1 < len(parts) else ""
             m = ENTRY_HEADER_RE.match(header)
             if not m:
                 continue
-            # Trim trailing newline so we round-trip cleanly
             body = body.rstrip("\n")
             self.entries.append({
-                "ptr_tbl_dec": int(m.group(1)),
+                "header": header,
                 "idx": int(m.group(2)),
-                "ptr_dec": int(m.group(3)),
                 "body": body,
             })
 
     def save_entry(self, entry_idx: int, new_body: str) -> None:
         """Rewrite one entry's body and write the full file atomically."""
         self.entries[entry_idx]["body"] = new_body
-        # Rebuild the full content
-        out: list[str] = []
-        for e in self.entries:
-            out.append(
-                f"<<${e['ptr_tbl_dec']}:{e['idx']}[${e['ptr_dec']}]>>\n"
-                f"{e['body']}\n"
-            )
+        out = [f"{e['header']}\n{e['body']}\n" for e in self.entries]
         content = "".join(out)
         # Atomic write: temp file in same dir → rename
         fd, tmp = tempfile.mkstemp(
@@ -355,14 +481,23 @@ def _tokenize_brackets(body: str) -> list:
                 i += 1
                 continue
             token = body[i + 1:end]
-            for part in token.split(":"):
-                part = part.strip()
-                if len(part) == 2:
+            # Accept any of: [XX], [XX:YY:ZZ] (legacy retrotool dump), or
+            # [XX YY ZZ] (space-separated, what our extractors emit).
+            # Walk the token splitting on either separator.
+            parts = re.split(r"[:\s]+", token.strip())
+            valid = all(len(p) == 2 for p in parts if p)
+            if valid and parts:
+                for part in parts:
+                    if not part:
+                        continue
                     try:
                         out.append(("byte", int(part, 16)))
                     except ValueError:
                         out.append(("char", "[" + token + "]"))
                         break
+            else:
+                # Not a hex-byte bracket — render literal so user sees it.
+                out.append(("char", "[" + token + "]"))
             i = end + 1
         elif c == "\n":
             out.append(("nl", None))
@@ -382,14 +517,69 @@ _OPCODE_LEN = {
 }
 
 
-def body_to_lines(body: str, char_to_byte: dict[str, int]) -> list:
+def body_byte_count(
+    body: str,
+    char_to_byte: dict[str, int],
+    cfg: Optional[dict] = None,
+) -> int:
+    """Count the encoded byte length of a body — what would land in ROM
+    after running the encoder. Matches the lookup in body_to_lines: chars
+    in `char_to_byte` cost 1 byte; chars only in `cfg['kanji_char_to_byte']`
+    (with kanji_escape enabled) cost 2 (FE XX). Bracket tokens contribute
+    their literal byte count; soft newlines are 0.
+
+    The caller picks which table to pass — `self.char_to_byte` for the
+    editable side, `self.jp_char_to_byte` for a JP reference, etc.
+    """
+    cfg = cfg or {}
+    kanji_escape = bool(cfg.get("kanji_escape"))
+    kanji_map = cfg.get("kanji_char_to_byte", {})
+
+    total = 0
+    for kind, val in _tokenize_brackets(body):
+        if kind == "byte":
+            total += 1
+        elif kind == "char":
+            if val in char_to_byte:
+                total += 1
+            elif kanji_escape and val in kanji_map:
+                total += 2  # FE XX
+            else:
+                # Unknown char — count as 1 (placeholder space) so the
+                # number doesn't lie about an editable file. The encoder
+                # will fail with a clear error at build time.
+                total += 1
+        # 'nl' contributes 0
+    return total
+
+
+def body_to_lines(
+    body: str,
+    char_to_byte: dict[str, int],
+    cfg: Optional[dict] = None,
+) -> list:
     """Parse a body into renderable lines. Returns a list where each item is
     either a list[int] of glyph indices (a line) or None (page-break gutter).
+
+    `cfg` overrides parse behavior per-file:
+      - `kanji_escape: True`  → FE XX is a 2-byte kanji index (emitted as
+        256 + XX so the renderer can route to the kanji atlas). Defaults to
+        False (dialog convention: FE = 1-byte page break).
+      - `cols_per_line: N`    → soft-wrap width (defaults to COLS_PER_LINE).
+
+    Kanji glyph indices in the returned lines are encoded as `256 + XX`;
+    kana glyphs stay 0..255. Renderer must dispatch on `v >= 256`.
     """
+    cfg = cfg or {}
+    kanji_escape = bool(cfg.get("kanji_escape"))
+    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
+
     pages: list[list[list[int]]] = [[[]]]
     def current_line() -> list[int]: return pages[-1][-1]
     def new_line(): pages[-1].append([])
     def new_page(): pages.append([[]])
+    def append_kana(b: int): current_line().append(b)
+    def append_kanji(xx: int): current_line().append(256 + xx)
 
     tokens = _tokenize_brackets(body)
     i = 0
@@ -400,11 +590,21 @@ def body_to_lines(body: str, char_to_byte: dict[str, int]) -> list:
             i += 1
             continue
         if kind == "char":
+            # Lookup chain: the script's own table (only). When kanji_escape
+            # is on, kanji chars not in that table fall through to a 2-byte
+            # FE XX emit via the kanji table. No cross-language fallback —
+            # an EN edit shouldn't preview JP kana, and a JP source's kana
+            # uses the JP table by being passed in via `char_to_byte`.
             b = char_to_byte.get(val)
-            if b is None:
-                # Unknown char — render as space so the user sees something
-                b = 0x00
-            current_line().append(b)
+            kanji_xx = None
+            if b is None and kanji_escape:
+                kanji_xx = cfg.get("kanji_char_to_byte", {}).get(val)
+            if kanji_xx is not None:
+                append_kanji(kanji_xx)
+            else:
+                if b is None:
+                    b = 0x00
+                append_kana(b)
             i += 1
             continue
         # byte
@@ -412,7 +612,14 @@ def body_to_lines(body: str, char_to_byte: dict[str, int]) -> list:
         if b == 0xFD:
             new_line(); i += 1
         elif b == 0xFE:
-            new_page(); i += 1
+            # Dialog FE = page break; intro FE = 2-byte kanji escape.
+            if kanji_escape:
+                i += 1
+                if i < len(tokens) and tokens[i][0] == "byte":
+                    append_kanji(tokens[i][1])
+                    i += 1
+            else:
+                new_page(); i += 1
         elif b == 0xF7:
             # Line-end / page-wait — visualize as a hard break
             new_line()
@@ -444,7 +651,11 @@ def body_to_lines(body: str, char_to_byte: dict[str, int]) -> list:
             current_line().append(b)
             i += 1
 
-    # Flatten + word-wrap to COLS_PER_LINE
+    # Flatten + word-wrap. With `mixed_width=True`, `cols` is in half-cell
+    # units: half-width glyphs (kana, Latin) count as 1, full-width glyphs
+    # (kanji, encoded as glyph index ≥ 256) count as 2. That mirrors how the
+    # in-game intro renderer wraps by pixels rather than by char count.
+    mixed_width = bool(cfg.get("mixed_width"))
     flat: list = []
     for pi, page in enumerate(pages):
         if pi > 0:
@@ -453,8 +664,21 @@ def body_to_lines(body: str, char_to_byte: dict[str, int]) -> list:
             if not ln:
                 flat.append([])
                 continue
-            for off in range(0, len(ln), COLS_PER_LINE):
-                flat.append(ln[off:off + COLS_PER_LINE])
+            if not mixed_width:
+                for off in range(0, len(ln), cols):
+                    flat.append(ln[off:off + cols])
+                continue
+            chunk: list[int] = []
+            units = 0
+            for g in ln:
+                w = 2 if g >= 256 else 1
+                if units + w > cols and chunk:
+                    flat.append(chunk)
+                    chunk, units = [], 0
+                chunk.append(g)
+                units += w
+            if chunk:
+                flat.append(chunk)
     return flat
 
 
@@ -462,13 +686,30 @@ def _draw_dialog_box(
     lines: list,                 # list of list[int] glyph rows for one page
     atlas: Image.Image,
     backdrop_rgba: tuple[int, int, int, int],
+    kanji_atlas: Optional[Image.Image] = None,
+    cols_per_line: int = COLS_PER_LINE,
+    mixed_width: bool = False,
 ) -> Image.Image:
     """Render one page (already split — no None entries) to a bordered
     dialog box. `backdrop_rgba` is palette slot 0 of the active speaker —
-    the actual in-game color behind the text. Returns an RGB Image at 1×."""
+    the actual in-game color behind the text. Returns an RGB Image at 1×.
+
+    Glyph indices ≥ 256 are routed to `kanji_atlas[idx - 256]` (see
+    body_to_lines). If `kanji_atlas` is None those positions render blank.
+
+    With `mixed_width=True`, half-width glyphs (kana / Latin, 8×16) and
+    full-width glyphs (kanji, 16×16) are drawn at their natural pixel
+    widths — matching the in-game intro layout — and `cols_per_line` is
+    interpreted in HALF-CELL UNITS. Without it, every cell is rendered at
+    the dialog's 8×16 size.
+    """
     pad = 12
-    text_w = COLS_PER_LINE * GLYPH_W
-    text_h = max(GLYPH_H, len(lines) * GLYPH_H)
+    # text_w is the maximum possible line width when mixed; the actual
+    # rendered row may be narrower depending on content.
+    unit_w = GLYPH_W
+    cell_h = KANJI_H if mixed_width else GLYPH_H
+    text_w = cols_per_line * unit_w
+    text_h = max(cell_h, len(lines) * cell_h)
     img_w = text_w + pad * 2
     img_h = text_h + pad * 2
     img = Image.new("RGB", (img_w, img_h), backdrop_rgba[:3])
@@ -485,17 +726,30 @@ def _draw_dialog_box(
         if 0 <= pad + text_w + 1 < img_w:
             img.putpixel((pad + text_w + 1, y), (90, 110, 150))
 
-    cols = 16  # atlas columns
+    cols = 16  # atlas columns (same for both kana and kanji atlases)
     y = pad
     for line in lines:
         x = pad
         for gi in line:
-            ax = (gi % cols) * GLYPH_W
-            ay = (gi // cols) * GLYPH_H
-            glyph = atlas.crop((ax, ay, ax + GLYPH_W, ay + GLYPH_H))
-            img.paste(glyph, (x, y), glyph)
-            x += GLYPH_W
-        y += GLYPH_H
+            if gi >= 256:
+                # Kanji glyph (intro FE-escape). Always full-width.
+                if kanji_atlas is None:
+                    x += KANJI_W
+                    continue
+                kx = gi - 256
+                ax = (kx % cols) * KANJI_W
+                ay = (kx // cols) * KANJI_H
+                glyph = kanji_atlas.crop((ax, ay, ax + KANJI_W, ay + KANJI_H))
+                img.paste(glyph, (x, y), glyph)
+                x += KANJI_W
+            else:
+                # Half-width kana / Latin glyph (8×16) from the dialog atlas.
+                ax = (gi % cols) * GLYPH_W
+                ay = (gi // cols) * GLYPH_H
+                glyph = atlas.crop((ax, ay, ax + GLYPH_W, ay + GLYPH_H))
+                img.paste(glyph, (x, y), glyph)
+                x += GLYPH_W
+        y += cell_h
     return img
 
 
@@ -504,15 +758,22 @@ def render_preview(
     atlas: Image.Image,
     char_to_byte: dict[str, int],
     backdrop_rgba: tuple[int, int, int, int] = (8, 48, 8, 255),
+    cfg: Optional[dict] = None,
+    kanji_atlas: Optional[Image.Image] = None,
 ) -> bytes:
-    """Render an entry to a PNG matching the in-game 24-col layout.
+    """Render an entry to a PNG matching the in-game layout.
 
     `atlas` and `backdrop_rgba` should come from the SAME speaker palette
     (see Bridge.get_entry / render_body for the lookup). Multi-page entries
     (containing [FE] page breaks) render as separate dialog boxes stacked
     vertically — same visual model as the game, which clears between pages.
+
+    `cfg` overrides per-file rendering (cols_per_line, kanji_escape — see
+    body_to_lines). `kanji_atlas` is needed when cfg["kanji_escape"]=True.
     """
-    lines = body_to_lines(body, char_to_byte)
+    cfg = cfg or {}
+    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
+    lines = body_to_lines(body, char_to_byte, cfg)
 
     pages: list[list[list[int]]] = [[]]
     for ln in lines:
@@ -524,7 +785,13 @@ def render_preview(
         pages = [[[]]]
 
     GAP = 10
-    page_imgs = [_draw_dialog_box(p, atlas, backdrop_rgba) for p in pages]
+    mixed_width = bool(cfg.get("mixed_width"))
+    page_imgs = [
+        _draw_dialog_box(p, atlas, backdrop_rgba,
+                         kanji_atlas=kanji_atlas, cols_per_line=cols,
+                         mixed_width=mixed_width)
+        for p in pages
+    ]
     full_w = max(im.width for im in page_imgs)
     full_h = sum(im.height for im in page_imgs) + GAP * (len(page_imgs) - 1)
     canvas = Image.new("RGB", (full_w, full_h), (10, 10, 22))
@@ -589,6 +856,15 @@ class Bridge:
     def __init__(self):
         self.rom, self.palettes, self.atlases = load_font_atlases()
         self.char_to_byte = load_table()
+        # Kanji atlas + reverse table for intro-style FE-escape rendering.
+        # Built once at startup using a neutral palette (intro is full-screen
+        # narration, not speaker-tinted dialog).
+        self.kanji_atlas = _build_kanji_atlas(self.rom, FALLBACK_PALETTE)
+        self.kanji_char_to_byte = _load_kanji_table()
+        # JP kana table — used as a fallback in body_to_lines so JP source
+        # entries (data/jp/*.txt) preview with actual kana glyphs instead of
+        # blank cells. EN edits still take precedence via self.char_to_byte.
+        self.jp_char_to_byte = _load_jp_kana_table()
         self.scenarios: dict[str, Scenario] = {}
         self.jp_scenarios: dict[str, Scenario] = {}
         self._save_timer: Optional[threading.Timer] = None
@@ -607,14 +883,23 @@ class Bridge:
         self._reload_scenarios()
 
     def _reload_scenarios(self) -> None:
-        """Re-scan EN + JP folders. JP is read-only reference."""
+        """Re-scan EN + JP folders. JP is read-only reference.
+
+        char_names.txt is the HUD name table (raw ASCII, not the PK dialog
+        font) — its in-app preview renders with the wrong glyphs but the
+        text is still editable. Insertion is via tools/charnames.py, not
+        the retrotool pipeline.
+        """
         self.scenarios = {}
         self.jp_scenarios = {}
-        for p in sorted(self.en_data_dir.glob("scenario_*.txt")):
-            self.scenarios[p.stem] = Scenario(p)
+        patterns = ("scenario_*.txt", "char_names.txt", "intro.txt")
+        for pat in patterns:
+            for p in sorted(self.en_data_dir.glob(pat)):
+                self.scenarios[p.stem] = Scenario(p)
         if self.jp_data_dir.exists():
-            for p in sorted(self.jp_data_dir.glob("scenario_*.txt")):
-                self.jp_scenarios[p.stem] = Scenario(p)
+            for pat in patterns:
+                for p in sorted(self.jp_data_dir.glob(pat)):
+                    self.jp_scenarios[p.stem] = Scenario(p)
 
     def _palette_for(self, portrait_id: Optional[int]) -> tuple[Image.Image, tuple[int,int,int,int]]:
         """Return (atlas, backdrop_rgba) for the given speaker. Defaults to
@@ -665,12 +950,25 @@ class Bridge:
             })
         return out
 
+    def _cfg_for(self, scenario_name: str) -> dict:
+        """Merge per-file config from SCENARIO_CONFIG with the kanji reverse
+        table so body_to_lines can fall through to FE XX for kanji in
+        kanji_escape mode. No cross-language kana fallback — the editable
+        body always renders with its own script's table."""
+        cfg = dict(SCENARIO_CONFIG.get(scenario_name, {}))
+        if cfg.get("kanji_escape"):
+            cfg["kanji_char_to_byte"] = self.kanji_char_to_byte
+        return cfg
+
     def get_entry(self, scenario_name: str, entry_i: int) -> dict:
         sc = self.scenarios[scenario_name]
         e = sc.entries[entry_i]
         pid = extract_portrait_id(e["body"])
         atlas, backdrop = self._palette_for(pid)
-        png = render_preview(e["body"], atlas, self.char_to_byte, backdrop)
+        cfg = self._cfg_for(scenario_name)
+        ka = self.kanji_atlas if cfg.get("kanji_escape") else None
+        png = render_preview(e["body"], atlas, self.char_to_byte, backdrop,
+                             cfg=cfg, kanji_atlas=ka)
         b64 = base64.b64encode(png).decode("ascii")
         # Look up the JP counterpart by entry index when available.
         jp_body = ""
@@ -678,6 +976,14 @@ class Bridge:
             jp_sc = self.jp_scenarios[scenario_name]
             if entry_i < len(jp_sc.entries):
                 jp_body = jp_sc.entries[entry_i]["body"]
+        # Each side uses its own script table. EN (editable) → rbshura_en.tbl
+        # via self.char_to_byte; JP (reference) → rbshura_jp.tbl via
+        # self.jp_char_to_byte. Both share the kanji-escape config (kanji
+        # round-trip semantics are identical on either side).
+        byte_count = body_byte_count(e["body"], self.char_to_byte, cfg)
+        jp_byte_count = (
+            body_byte_count(jp_body, self.jp_char_to_byte, cfg) if jp_body else 0
+        )
         return {
             "body": e["body"],
             "jp_body": jp_body,
@@ -685,14 +991,29 @@ class Bridge:
             "portrait_id": pid,
             "portrait_name": portrait_name(pid) if pid is not None else None,
             "portrait_image": portrait_image_uri(pid),
+            "byte_count": byte_count,
+            "jp_byte_count": jp_byte_count,
         }
 
-    def render_body(self, body: str) -> str:
-        """Cheap render-only call (no file write) for live preview."""
+    def render_body(self, body: str, scenario_name: str = "") -> dict:
+        """Cheap render-only call (no file write) for live preview.
+
+        `scenario_name` lets us pick up per-file config (cols_per_line,
+        kanji_escape). Omitted defaults to dialog rendering.
+
+        Returns {png, byte_count} so the UI can update both the preview
+        image and the byte-budget badge from a single round-trip.
+        """
         pid = extract_portrait_id(body)
         atlas, backdrop = self._palette_for(pid)
-        png = render_preview(body, atlas, self.char_to_byte, backdrop)
-        return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        cfg = self._cfg_for(scenario_name) if scenario_name else {}
+        ka = self.kanji_atlas if cfg.get("kanji_escape") else None
+        png = render_preview(body, atlas, self.char_to_byte, backdrop,
+                             cfg=cfg, kanji_atlas=ka)
+        return {
+            "png": "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
+            "byte_count": body_byte_count(body, self.char_to_byte, cfg),
+        }
 
     # ---- autosave (debounced) ----
     def queue_save(self, scenario_name: str, entry_i: int, body: str) -> None:
@@ -1132,12 +1453,18 @@ textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; 
       <div class="text-area">
         <div class="text-col">
           <label><span id="lbl-editable">EN</span> BODY
-            <span style="color:var(--grn);font-size:9px;">editable</span></label>
+            <span style="color:var(--grn);font-size:9px;">editable</span>
+            <span id="body-bytes" style="color:var(--fg2);font-size:10px;
+                                         margin-left:6px;font-family:var(--code);"
+                  title="encoded byte length (what the build will write)"></span></label>
           <textarea id="body" spellcheck="false" placeholder="select an entry"></textarea>
         </div>
         <div class="text-col">
           <label><span id="lbl-reference">JP</span> REFERENCE
-            <span class="ro">read-only</span></label>
+            <span class="ro">read-only</span>
+            <span id="jp-body-bytes" style="color:var(--fg2);font-size:10px;
+                                            margin-left:6px;font-family:var(--code);"
+                  title="encoded byte length of the reference entry"></span></label>
           <textarea id="jp-body" readonly spellcheck="false"
                     placeholder="reference source not loaded"></textarea>
         </div>
@@ -1279,6 +1606,8 @@ async function selectEntry(i) {
   document.getElementById('body').value = e.body;
   document.getElementById('jp-body').value = e.jp_body || '';
   document.getElementById('preview-img').src = e.preview_png;
+  setBodyBytes(e.byte_count);
+  setJpBodyBytes(e.jp_byte_count);
   const portraitBox = document.getElementById('portrait');
   const portraitPid = document.getElementById('portrait-pid');
   const portraitName = document.getElementById('portrait-name');
@@ -1321,6 +1650,23 @@ function setBadge(cls, text) {
   document.getElementById('savebadge-label').textContent = text;
 }
 
+function setBodyBytes(n) {
+  // Encoded byte length next to the BODY label. Hidden when null/undefined
+  // (e.g. before any entry is loaded).
+  const el = document.getElementById('body-bytes');
+  if (!el) return;
+  if (n == null) { el.textContent = ''; return; }
+  el.textContent = n + ' B';
+}
+
+function setJpBodyBytes(n) {
+  // Encoded byte length of the reference (JP) entry — read-only counterpart.
+  const el = document.getElementById('jp-body-bytes');
+  if (!el) return;
+  if (n == null || n === 0) { el.textContent = ''; return; }
+  el.textContent = n + ' B';
+}
+
 function startSavePolling() {
   if (SAVE_POLL) return;
   SAVE_POLL = setInterval(async () => {
@@ -1354,8 +1700,9 @@ document.getElementById('body').addEventListener('input', () => {
   if (DEBOUNCE) clearTimeout(DEBOUNCE);
   DEBOUNCE = setTimeout(async () => {
     try {
-      const png = await pywebview.api.render_body(body);
-      document.getElementById('preview-img').src = png;
+      const r = await pywebview.api.render_body(body, CURRENT.scenario);
+      document.getElementById('preview-img').src = r.png;
+      setBodyBytes(r.byte_count);
       await pywebview.api.queue_save(CURRENT.scenario, CURRENT.entry_i, body);
       // queue_save returns immediately; the file write happens ~400ms later
       // on a Python Timer. Poll get_save_state() to know when it lands.
@@ -1517,6 +1864,8 @@ async function replaceOne() {
     const e = await pywebview.api.get_entry(hit.scenario, hit.entry_i);
     document.getElementById('body').value = e.body;
     document.getElementById('preview-img').src = e.preview_png;
+    setBodyBytes(e.byte_count);
+    setJpBodyBytes(e.jp_byte_count);
   }
   // Re-run the search (offsets shifted after replacement)
   await runSearch();

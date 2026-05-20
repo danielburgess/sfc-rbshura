@@ -98,50 +98,96 @@ org $C582EB : db $B7    ; F9-handler read
 ;   5. Replace $00:$01:$02 with the string ptr.
 ;   6. RTL — caller proceeds with `LDA [$00],Y` to read chars.
 
+; -----------------------------------------------------------------------------
+; Per-scenario L4 table convention (verified 2026-05-19 via SplitTrace):
+;   * Scens 0-13: L4 table written to ROM by retrotool as 24-bit entries.
+;     Reachable via DBR-relative read; bank byte comes from the table.
+;   * Scens 14, 15 (ending + credits): L4 table is constructed in WRAM at
+;     boot/scenario-start. The bank lookup at $05:807A returns $7E (or $00)
+;     for these. Their tables stay 16-bit (2-byte stride) because we don't
+;     touch the WRAM blob. The stub MUST detect this and skip the *3 Y-scale
+;     and the bank-byte fetch — otherwise it reads misaligned bytes from
+;     WRAM and the pointer dereferences a garbage bank.
+;
+; Detection: bank-lookup table at $05:807A — one byte per scen. If that
+; byte equals $7E, take the legacy 16-bit path.
+; -----------------------------------------------------------------------------
+
 org $C87000                 ; bank $08 freespace start
 L4_Deref_24:
-    ; --- Compute X = scen×2 (16-bit) ---
     REP #$10                ; X/Y → 16-bit (caller had X 8-bit, Y 8-bit)
     LDA $00D0
-    AND #$00FF              ; (defensive; high byte should already be 0)
-    TAX                     ; X = scen × 2
+    AND #$00FF              ; A = scen × 2
+    PHA                     ; save for the path that needs it
+    LSR                     ; A = scen index (0..15)
+    TAX
 
-    ; --- Fetch L4 base (16-bit) from meta-table → $00:$01 ---
-    LDA $858233,X
-    STA $00
-
-    ; --- Set $02 = scen bank (current DBR) ---
+    ; Bank lookup: $05:807A + scen_index → ROM-side DBR for this scen.
     SEP #$20                ; A → 8-bit
-    PHB                     ; push DBR
-    PLA                     ; A = DBR
-    STA $02                 ; $02 = scen bank ($85 / $87 / $7E)
-    REP #$20                ; A → 16-bit
+    LDA $85807A,X
+    CMP #$7E                ; WRAM-resident scenario?
+    BEQ .legacy16
+    REP #$20                ; restore 16-bit A for the 24-bit path
 
-    ; --- Scale Y: entry_idx*2 → entry_idx*3 ---
-    TYA                     ; A = entry_idx*2 (high byte 0 from Y 8-bit→16-bit)
+    ; --- 24-bit path (scens 0-13) ---
+    PLA                     ; A = scen × 2
+    TAX
+
+    LDA $858233,X
+    STA $00                 ; $00/$01 = L4 base (low 16-bit)
+
+    SEP #$20
+    PHB
+    PLA
+    STA $02                 ; $02 = current DBR (overwritten below w/ ptr's bank)
+    REP #$20
+
+    TYA                     ; A = entry_idx*2
     AND #$00FF
     LSR                     ; A = entry_idx
-    STA $03                 ; scratch
+    STA $03
     ASL                     ; A = entry_idx*2
     CLC
     ADC $03                 ; A = entry_idx*3
-    TAY                     ; Y = entry_idx*3
+    TAY
 
-    ; --- 24-bit fetch of string ptr low/high (16-bit A) ---
-    LDA [$00],Y             ; A = string_ptr_lo + string_ptr_hi
-    TAX                     ; save in X (X is 16-bit from REP #$10)
+    LDA [$00],Y             ; string_ptr_lo + string_ptr_hi
+    TAX
     INY
-    INY                     ; Y += 2 → bank byte offset
+    INY
 
-    ; --- 24-bit fetch of string ptr bank byte (8-bit A) ---
     SEP #$20
-    LDA [$00],Y             ; A = string_ptr_bank
-    STA $02                 ; overwrite L4 table bank with string bank
+    LDA [$00],Y             ; string_ptr_bank
+    STA $02                 ; bank from the L4 entry itself
     REP #$20
 
-    ; --- Final placement: $00:$01 = string lo/hi; $02 already set ---
     TXA
-    STA $00
+    STA $00                 ; $00/$01 = string ptr
+    RTL
+
+.legacy16:
+    ; --- 16-bit legacy path (scens 14, 15 — WRAM-resident L4) ---
+    ; A is 8-bit here; widen back to 16-bit for the rest.
+    REP #$20
+    PLA                     ; A = scen × 2
+    TAX
+
+    LDA $858233,X
+    STA $00                 ; $00/$01 = L4 base (low 16-bit, in WRAM)
+
+    SEP #$20
+    PHB
+    PLA
+    STA $02                 ; $02 = DBR (= $7E for WRAM-resident scens)
+    REP #$20
+
+    ; Y stays at entry_idx*2 (engine convention) — no *3 scaling.
+    TYA
+    AND #$00FF
+    TAY
+
+    LDA [$00],Y             ; 16-bit string ptr from WRAM L4 table
+    STA $00                 ; $00/$01 = string ptr; $02 keeps DBR
     RTL
 
 ; -----------------------------------------------------------------------------
