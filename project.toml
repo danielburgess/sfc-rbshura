@@ -107,16 +107,19 @@ file = "patches/intro_remove_delays.asm"
 # kind = "asar"
 # file = "patches/intro_dialog_port.asm"
 
-# 9. Intro DMA-descriptor tuning for PK font — three single-byte edits
-# that retune the existing renderer for half-width 8×16 PK glyphs:
-#   $C5:F049 ($20 → $10) — record 1 source offset (PK bot tile is +$10 B)
-#   $C5:F04F ($20 → $10) — DMA transfer size (1 tile 2bpp = $10 B)
-#   $C5:F075 ($10 → $08) — per-char VRAM-dest advance (+1 tile, not +2)
-# Bank stays at $D0 (PK font lives at SNES $D0:0000 = file $100000).
-# Byte*64 math is unchanged (PK slots are 64 B each, same stride).
+# 9. Intro renderer — double-render per outer invocation (match PK cadence) +
+# DMA-descriptor tuning for PK font (the constants previously in
+# intro_pk_dma.asm are now baked into the new renderer in bank-$08 freespace).
+# Renderer body is JSL'd twice from $05:EFFD-$F005 (overwrites the original
+# inline prologue; orphans $05:F006-$F08B). Net effect: typewriter throughput
+# doubles to match PK's measured ~12 chars/sec, while the existing BG3VOFS
+# HDMA scroll (chan 7, $7E:0530) keeps incrementing once per outer call via
+# the unchanged INC $0530 at $05:EFFA.
+# Supersedes intro_pk_dma.asm — that file is left in tree for reference but
+# is NOT wired into the build.
 [[rom.build.sections]]
 kind = "asar"
-file = "patches/intro_pk_dma.asm"
+file = "patches/intro_double_render.asm"
 
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads
