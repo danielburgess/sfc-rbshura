@@ -10,16 +10,29 @@
 # either an English replacement or a raw-byte form like `[20]` for layout
 # spacing.
 #
-# Byte budgets enforced by `len`:
-#   part1  $1FC8F1..$1FCD34 = 1092 B  (Cyber-Clone Incident backstory)
-#   part2  $1FCD35..$1FD01E =  746 B  (Maria Norton narration)
-# Encoder errors out if either field overflows.
+# Auto-pack mode (no per-field `start`/`len`, no `block_len`):
+# - part1 packs at offset 0 (so the pointer at $1F:C57F = $C8F1 still works)
+# - part2 packs immediately after part1 with whatever size it encodes to
+# - retrotool auto-fills the 25 pointer-table entries at $1F:C5A7-$C5D7
+#   with part2's actual within-bank address every build
+# - total bounded only by `[data].end` (currently set to give ~5 KB of
+#   headroom over the current encoded size of ~3 KB)
+#
+# Net: editing data/{en,jp}/intro.txt requires zero ROM-bookkeeping. As
+# long as part1+part2 fit in the data region, the build just works.
 
 entries = 1
-block_len = 1838
-fields = [
-    { label = "part1", start = 0,    len = 1092, fill = 0x00 },
-    { label = "part2", start = 1092, len = 746,  fill = 0x00 },
+[[fields]]
+label = "part1"
+fill = 0x00
+
+[[fields]]
+label = "part2"
+fill = 0x00
+ptr_writes = [
+    # 25 × 16-bit within-bank pointers driving part2 playback. The pointer
+    # value (part2's auto-computed offset) is recomputed each build.
+    { addr = "$1FC5A7", count = 25, size = 2, format = "within-bank" },
 ]
 
 [table]
@@ -38,8 +51,12 @@ terminator = 0xFF
 # original $1F:C8F1 / $1F:CD35. Same low-16 offsets within the bank.
 #
 # File offsets ($1F:C8F1 → $E0:C8F1 = file $20:C8F1).
+# `end` bounds total auto-packed size; current encoded content is ~3 KB
+# (part1 ≈ 1957 B + part2 ≈ 1052 B). The 5 KB envelope leaves headroom
+# for translation expansion. If you bump this further, also update the
+# matching freespace split in project.toml.
 offset = "$20C8F1"
-end = "$20D01F"
+end = "$20DC91"
 
 [section]
 kind = "fixed-records"

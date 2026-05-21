@@ -1,0 +1,50 @@
+# Engine scenario 14 (filename scenario_28 = scen × 2) — the ending sequence.
+#
+# This scenario is WRAM-resident: per the bank-lookup table at $05:807A,
+# engine scen 14 uses DBR=$7E, meaning the engine reads its L4 pointer table
+# AND its string data from WRAM ($7E:C700 onwards). The data is COPIED into
+# WRAM at scenario-start by an engine routine we have not yet RE'd.
+#
+# ROM source location (found 2026-05-19 by searching for the byte signature
+# of entry 0's WRAM bytes):
+#   $18F482 — start of scen 14 string data block
+# Block extent: walks ~2510 B forward through 77 FF-terminated entries,
+# ending near $18FE50.
+#
+# OPEN PROBLEM — insertion not yet wired:
+#
+# Comparing ROM bytes at $18F482 to WRAM bytes at $7E:C79A shows the engine
+# applies a non-trivial transformation during the ROM→WRAM copy: extra `FF`
+# bytes appear in ROM at specific positions and disappear in WRAM. The
+# pattern is not simple "strip all FF" — some are kept (e.g. as FC.02 args
+# or F7 args), others removed. Until we RE the copy routine, we can't
+# encode `data/jp/scenario_28.txt` back into ROM form.
+#
+# Until then:
+#   - data/jp/scenario_28.txt holds the WRAM-decoded entries (77 strings,
+#     dialog FE=1 convention) — translation-ready
+#   - data/en/scenario_28.txt is a copy seed for translation
+#   - Inserting back is a future RE task; see
+#     memory/project_wram_resident_scenarios.md for the open problem.
+#   - The engine-side crash fix (patches/24bit_ptrs.asm) is already in place
+#     so this scenario reaches the ending without freezing, even though
+#     it's still rendering JP text.
+#
+# When the RE is unblocked, this file should switch to a real DataDef shape:
+#   - [data].offset = "$18F482" + computed .end
+#   - [section].kind = "bin"  (after we have a working encoder + transform)
+# or possibly a custom kind that knows the FF-padding rules.
+
+[meta]
+kind = "stub"
+status = "extraction-only — insertion not yet wired"
+rom_source = "$18F482"
+wram_dest = "$7E:C700 (L4 table) + $7E:C79A (strings)"
+engine_scen = 14
+entry_count = 77
+
+[references]
+text_dump = "data/jp/scenario_28.txt"
+en_seed = "data/en/scenario_28.txt"
+engine_fix = "patches/24bit_ptrs.asm"
+open_problem_memory = "memory/project_wram_resident_scenarios.md"

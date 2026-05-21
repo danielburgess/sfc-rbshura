@@ -33,11 +33,13 @@ freespace = [
     ["$0975DA", "$097A1B"],   # bank $09: 1089 B
     # Expansion banks $E0-$FF: 2 MB pristine pool. Used after in-ROM space
     # is exhausted. Plenty of headroom for future EN content / patches.
-    # SPLIT around the relocated intro region (file $20:C8F1..$20:D01E,
-    # 1838 B reserved for intro_part1 + intro_part2 — see tables/intro.toml
-    # and patches/relocate_intro.asm). Allocator skips the reserved hole.
+    # SPLIT around the relocated intro region (file $20:C8F1..$20:DC90,
+    # ~5 KB envelope for intro_part1 + intro_part2 in auto-pack mode — see
+    # tables/intro.toml's `[data].end` and `[[fields]]` declarations).
+    # Allocator skips the reserved hole. Bump both `[data].end` and the
+    # split below in lockstep if the EN translation grows past ~5 KB.
     ["$200000", "$20C8F1"],   # $E0:0000..$E0:C8F0
-    ["$20D01F", "$400000"],   # $E0:D01F..$FF:FFFF
+    ["$20DC91", "$400000"],   # $E0:DC91..$FF:FFFF
 ]
 
 # ---- Inline sections: font + engine patches ----
@@ -65,22 +67,7 @@ file = "patches/tight_renderer.asm"
 kind = "asar"
 file = "patches/24bit_ptrs.asm"
 
-# 4. Intro relocation — change story-screen renderer DBR from $DF to $E0
-# so the intro text reads from bank $E0 (expansion freespace) instead of
-# bank $1F (where it sat in the JP source). tables/intro.toml writes the
-# encoded EN/JP text into the new location at $E0:C8F1 / $E0:CD35.
-[[rom.build.sections]]
-kind = "asar"
-file = "patches/relocate_intro.asm"
-
-# 5. Tight intro tilemap — DISABLED 2026-05-20: simple "NOP TR/BR + halve
-# advance" pattern that worked for the dialog box doesn't transfer to the
-# intro renderer. Patch left in patches/tight_intro.asm for reference.
-# [[rom.build.sections]]
-# kind = "asar"
-# file = "patches/tight_intro.asm"
-
-# 6. Convert intro typewriter → static (PK-style). rbshura's bank $1F has
+# 4. Convert intro typewriter → static (PK-style). rbshura's bank $1F has
 # 17 `JSL $80:D8E8` sites (the VBlank-wait routine Jaleco inserted on top
 # of PK's renderer) that produce the typewriter cadence. PK's same bank
 # region has zero of these calls. NOPping them removes the per-char wait
@@ -90,33 +77,18 @@ file = "patches/relocate_intro.asm"
 kind = "asar"
 file = "patches/intro_remove_delays.asm"
 
-# 7. Intro tile_num formula tweak — DISABLED 2026-05-20: misdiagnosed.
-# (See patch comments + memory/project_intro_text.md for the rabbit hole.)
-# [[rom.build.sections]]
-# kind = "asar"
-# file = "patches/intro_tile_formula.asm"
-
-# 8. Intro → dialog-style tilemap port — DISABLED 2026-05-20. Built on a
-# wrong premise: assumed the staging buffer at $7E:0E22 was a tilemap, but
-# it's actually a list of 8-byte DMA-descriptor records consumed by the
-# uploader at $C0:9BC2. Writing tile numbers to it caused the DMA to use
-# (byte*2 | $3C00) as source addr with garbage size, producing crashes
-# and the 0|1|2|3|... horizontal-strip artifact. See section 9 for the
-# correct fix.
-# [[rom.build.sections]]
-# kind = "asar"
-# file = "patches/intro_dialog_port.asm"
-
-# 9. Intro renderer — double-render per outer invocation (match PK cadence) +
-# DMA-descriptor tuning for PK font (the constants previously in
-# intro_pk_dma.asm are now baked into the new renderer in bank-$08 freespace).
+# 5. Intro renderer — double-render per outer invocation (match PK cadence)
+# + DMA-descriptor tuning for the PK font + bank-flip $DF→$E0 baked in.
 # Renderer body is JSL'd twice from $05:EFFD-$F005 (overwrites the original
 # inline prologue; orphans $05:F006-$F08B). Net effect: typewriter throughput
-# doubles to match PK's measured ~12 chars/sec, while the existing BG3VOFS
-# HDMA scroll (chan 7, $7E:0530) keeps incrementing once per outer call via
-# the unchanged INC $0530 at $05:EFFA.
-# Supersedes intro_pk_dma.asm — that file is left in tree for reference but
-# is NOT wired into the build.
+# doubles to match PK's measured ~12 chars/sec; intro text reads from the
+# relocated bank-$E0 region (via `LDA #$E0` at $0870A8 in the new renderer);
+# the existing BG3VOFS HDMA scroll (chan 7, $7E:0530) keeps incrementing
+# once per outer call via the unchanged `INC $0530` at $05:EFFA.
+# Note: the part2 pointer-table repoint (25 entries at $1F:C5A7-$C5D7) is
+# handled automatically by tables/intro.toml via field-level `ptr_writes`,
+# not a separate asar patch — so part1/part2 budget changes flow through
+# without manual address bookkeeping.
 [[rom.build.sections]]
 kind = "asar"
 file = "patches/intro_double_render.asm"
