@@ -1,0 +1,44 @@
+# Engine scenario 14 (filename scenario_28 = engine × 2) — the ending
+# sequence. Originally WRAM-resident (the engine's runtime loader built
+# $7E:C700 from a complex encoded source we never fully RE'd). The hack:
+# `patches/24bit_ptrs.asm` now flips two ROM bytes to redirect scen 14's
+# L4 lookup from WRAM `$7E:C700` to ROM `$E0:F000`, which puts scen 14
+# on the standard 24-bit pipeline used by all the other ROM scenarios.
+#
+# After the redirect, this DataDef behaves like scenario_00.toml etc.:
+# retrotool writes the 24-bit L4 table at $E0:F000 and relocates each
+# entry's string into the bank-$E0 freespace pool.
+#
+# See memory/project_wram_resident_scenarios.md for the RE history of
+# why we couldn't reuse the pristine $18F482 source.
+
+[table]
+name = "scenario_28"
+type = "pointer"
+
+[encoding]
+table_file = "tables/rbshura_en.tbl"
+terminator = 0xFF
+
+[pointers]
+# 24-bit LE HiROM pointers (77 entries). Lives in our reserved freespace
+# at $E0:F000 — see project.toml's freespace split. Engine reads via
+# patches/24bit_ptrs.asm's 24-bit path (taken because $05:8088 is now $E0
+# instead of $7E, so the BEQ .legacy16 doesn't fire for scen 14).
+offset = "$E0F000"
+count = 77
+size = 3
+
+[data]
+# IGNORED under pointer-size=3 + mode="relocate" — the relocate handler
+# routes every entry into [rom.build].freespace. Documented here for
+# context: the L4 table itself occupies $E0:F000..$E0:F0E6 (77 × 3 B);
+# strings get scattered into freespace by retrotool, with each L4 entry
+# updated to point to its allocated location.
+offset = "$E0F0E7"
+end = "$E0FF00"
+
+[section]
+kind = "script"
+[section.placement]
+mode = "relocate"
