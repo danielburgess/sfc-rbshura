@@ -33,13 +33,17 @@ freespace = [
     ["$0975DA", "$097A1B"],   # bank $09: 1089 B
     # Expansion banks $E0-$FF: 2 MB pristine pool. Used after in-ROM space
     # is exhausted. Plenty of headroom for future EN content / patches.
-    # SPLIT around the relocated intro region (file $20:C8F1..$20:DC90,
-    # ~5 KB envelope for intro_part1 + intro_part2 in auto-pack mode — see
-    # tables/intro.toml's `[data].end` and `[[fields]]` declarations).
-    # Allocator skips the reserved hole. Bump both `[data].end` and the
-    # split below in lockstep if the EN translation grows past ~5 KB.
+    # SPLIT around two reservations:
+    #   * intro region (file $20:C8F1..$20:DC90, ~5 KB) — see
+    #     tables/intro.toml's `[data].end` and `[[fields]]`
+    #   * scen 14 region (file $20:F000..$20:FF00, ~4 KB) — see
+    #     tables/scenario_28.toml; the engine redirect in
+    #     patches/24bit_ptrs.asm makes scen 14 read its 24-bit L4 table
+    #     + strings from $E0:F000 instead of WRAM $7E:C700
+    # Allocator skips both reserved holes.
     ["$200000", "$20C8F1"],   # $E0:0000..$E0:C8F0
-    ["$20DC91", "$400000"],   # $E0:DC91..$FF:FFFF
+    ["$20DC91", "$20F000"],   # $E0:DC91..$E0:EFFF   (post-intro, pre-scen14)
+    ["$20FF00", "$400000"],   # $E0:FF00..$FF:FFFF   (post-scen14)
 ]
 
 # ---- Inline sections: font + engine patches ----

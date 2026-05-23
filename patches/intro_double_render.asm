@@ -40,6 +40,19 @@
 hirom
 
 ; -----------------------------------------------------------------------------
+; Tunable: BG3 horizontal-scroll offset applied during intro narrative.
+; The intro's BG3 H-scroll is HDMA-driven from $7E:052D (mirror of how
+; $7E:0530 drives BG3VOFS). Engine init at $05:F2CE / $1FE535 / $1FF848 /
+; $1FFEB0 zeroes $052D, so absent this override the text renders starting
+; at the tilemap's column 0. Writing a positive value here scrolls the
+; BG3 window RIGHT through the tilemap (= text appears to move LEFT on
+; screen). 16 = one half-width char (8 px × 2-tile-stack column).
+;
+; Set to 0 to disable; bump to taste (multiples of 8 keep tile alignment).
+!INTRO_BG3_HOFS = $0010
+; -----------------------------------------------------------------------------
+
+; -----------------------------------------------------------------------------
 ; NewIntroRenderer @ $C8:7080 — RTL-callable copy of rbshura's per-char render
 ; (the $05:EFFD-$F08B sequence, with intro_pk_dma.asm constants baked in).
 ;
@@ -57,6 +70,13 @@ hirom
 ; -----------------------------------------------------------------------------
 org $C87080
 NewIntroRenderer:
+    ; Force the BG3 H-scroll shadow to !INTRO_BG3_HOFS every render call.
+    ; Runs every char render; cheap (5 cycles in 16-bit) and overrides the
+    ; init-time STZ $052D in bank $05/$1F. Adjust the constant above to
+    ; nudge text horizontally without redoing this patch.
+    REP #$20
+    LDA #!INTRO_BG3_HOFS
+    STA $052D
     SEP #$20                ; M=1 (8-bit A)
     LDA #$00 : XBA          ; A_hi = 0 (cleared for the later byte<<8 trick)
     LDX $0F22               ; X = staging-buffer cursor

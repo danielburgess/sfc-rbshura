@@ -125,7 +125,28 @@ L4_Deref_24:
     ; Bank lookup: $05:807A + scen_index → ROM-side DBR for this scen.
     SEP #$20                ; A → 8-bit
     LDA $85807A,X
-    CMP #$7E                ; WRAM-resident scenario?
+    STA $03                 ; STASH bank byte ($03 is free until used as
+                            ;   entry_idx temp below — see comment there)
+
+    ; ---------------------------------------------------------------
+    ; Scen 14 override (added 2026-05-21):
+    ; The bank-lookup table at $05:807A is shared by the engine's
+    ; per-scenario state setup at $05:800D, so we MUST leave $05:8088
+    ; at $7E for scen 14 (otherwise engine DBR setup hits ROM $E0:05xx
+    ; instead of WRAM $7E:05xx and the dialog state machine breaks —
+    ; see memory/project_wram_resident_scenarios.md 2026-05-21 entry).
+    ;
+    ; Detect scen 14 here in the stub and route it to the 24-bit ROM
+    ; path with hardcoded $E0:F000 base. Engine state setup still
+    ; reads $7E and works correctly; only the L4 STRING lookup is
+    ; redirected to our EN-populated ROM table.
+    ;
+    ; X is 16-bit here (REP #$10 at top). CPX immediate compares 16-bit.
+    ; ---------------------------------------------------------------
+    CPX #$000E              ; scen 14?
+    BEQ .scen14_rom_override
+
+    CMP #$7E                ; otherwise: WRAM-resident (scen 15)?
     BEQ .legacy16
     REP #$20                ; restore 16-bit A for the 24-bit path
 
@@ -135,11 +156,26 @@ L4_Deref_24:
 
     LDA $858233,X
     STA $00                 ; $00/$01 = L4 base (low 16-bit)
+    BRA .common_24bit       ; share entry-decode tail with scen-14 path
 
+.scen14_rom_override:
+    ; Hardcoded override: bank $E0, L4 base $F000 (matches tables/scenario_28.toml).
+    LDA #$E0
+    STA $03                 ; override stashed bank
+    REP #$20
+    PLA                     ; discard saved scen × 2 — we don't use $858233 here
+    LDA #$F000
+    STA $00                 ; $00/$01 = L4 base for scen 14
+    ; fall through
+
+.common_24bit:
     SEP #$20
-    PHB
-    PLA
-    STA $02                 ; $02 = current DBR (overwritten below w/ ptr's bank)
+    LDA $03                 ; recall the bank we stashed above
+    STA $02                 ; $02 = L4 table's bank (= $85, $87, or $E0).
+                            ; Previously this was `PHB / PLA / STA $02`
+                            ; which used the caller's DBR — coincidentally
+                            ; right for $85/$87 banks but WRONG for our
+                            ; relocated scen 14 in bank $E0.
     REP #$20
 
     TYA                     ; A = entry_idx*2
@@ -195,3 +231,24 @@ L4_Deref_24:
 ; with respect to X/Y width (we already set it inside the stub), and the
 ; subsequent `LDY $1C4A` re-establishes Y to the per-character index.
 ; -----------------------------------------------------------------------------
+
+; =============================================================================
+; Scen 14 redirect history — stub-side override (2026-05-21)
+; =============================================================================
+; FIRST ATTEMPT (broken, reverted): flipped two ROM bytes in the bank-lookup
+; table to force scen 14 onto the 24-bit ROM path:
+;   org $C58088 : db $E0       ; $7E → $E0
+;   org $C58250 : db $F0       ; $C7 → $F0
+; This worked for L4 deref BUT the table at $05:807A is shared with engine
+; state setup at $05:800D (`PHA / PLB` to set DBR before reading scenario
+; state at $0560/$0600/$0700/etc.). The flip made the engine read state
+; from ROM bank $E0 at those offsets — all zeros — and the dialog state
+; machine never entered dialog state. Dialog boxes themselves stopped
+; rendering. Reverted.
+;
+; CURRENT APPROACH: stub-side override inside L4_Deref_24 (see CPX #$000E
+; check above). The ROM byte at $05:8088 stays $7E so the engine's state
+; setup keeps using DBR=$7E (correct). The L4 stub detects scen 14 from
+; the scen index, sets bank/base to hardcoded $E0:F000, and routes through
+; the standard 24-bit string-lookup path. EN bytes from tables/scenario_28.toml
+; are read from ROM; engine state still lives in WRAM as the loader expects.
