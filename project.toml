@@ -42,7 +42,8 @@ freespace = [
     #     + strings from $E0:F000 instead of WRAM $7E:C700
     # Allocator skips both reserved holes.
     ["$200000", "$20C8F1"],   # $E0:0000..$E0:C8F0
-    ["$20DC91", "$20F000"],   # $E0:DC91..$E0:EFFF   (post-intro, pre-scen14)
+    ["$20DC91", "$20E000"],   # $E0:DC91..$E0:DFFF   (post-intro, pre-ScriptGate)
+    ["$20E020", "$20F000"],   # $E0:E020..$E0:EFFF   (post-ScriptGate, pre-scen14)
     ["$20FF00", "$400000"],   # $E0:FF00..$FF:FFFF   (post-scen14)
 ]
 
@@ -71,15 +72,24 @@ file = "patches/tight_renderer.asm"
 kind = "asar"
 file = "patches/24bit_ptrs.asm"
 
+# 3b. Scen 14 (ending cutscene) script-timing gate. Gates the bank-$85
+# cutscene script player at $85:EE36 on renderer-ready ($1C4A == 0) so
+# longer EN text can finish each entry before the next script step
+# advances L1. Stub at $C8:7080 (32 B). See
+# memory/project_wram_resident_scenarios.md 2026-05-22 for evidence.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/scen28_script_gate.asm"
+
 # 4. Convert intro typewriter → static (PK-style). rbshura's bank $1F has
 # 17 `JSL $80:D8E8` sites (the VBlank-wait routine Jaleco inserted on top
 # of PK's renderer) that produce the typewriter cadence. PK's same bank
 # region has zero of these calls. NOPping them removes the per-char wait
 # so all chars render in one frame. Risk: other side-effects of $80:D8E8
 # (audio/NMI yield) — narrow the set if anything else regresses.
-[[rom.build.sections]]
-kind = "asar"
-file = "patches/intro_remove_delays.asm"
+#[[rom.build.sections]]
+#kind = "asar"
+#file = "patches/intro_remove_delays.asm"
 
 # 5. Intro renderer — double-render per outer invocation (match PK cadence)
 # + DMA-descriptor tuning for the PK font + bank-flip $DF→$E0 baked in.
