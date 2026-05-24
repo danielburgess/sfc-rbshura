@@ -1,0 +1,45 @@
+# Post-intro-scroll character-narration screens — pointer-handled text blocks.
+# These are the ELFIN / DICK / KYTHRING / JIMMY name+epilogue screens shown
+# after the main intro scroll. They live in the $1F:C57F screen pointer table
+# at idx 1-19 (variable-length entries; idx 1,2,3 etc. share a pointer where a
+# screen persists across cutscene steps).
+#
+# Rendered by patches/narration_render.asm (ported from Peacekeepers): each
+# entry is [dest_word:2] + 1-byte half-width char indices + [FF]; the renderer
+# DMAs one 8x16 PK-font glyph per index, render-at-once. It reads the stream
+# with DBR=$DF (bank $1F), so the text stays in bank $1F.
+#
+# This is a pointer DataDef (NOT fixed-records — entry lengths are irrelevant,
+# the pointer table addresses each block). retrotool reads the 19 pointers at
+# $1F:C581 (idx 1), relocates the encoded EN blocks into the data region, and
+# rewrites the 16-bit within-bank pointers. The intro owns idx 0 (part1) and
+# idx 20-44 (part2 via tables/intro.toml); this owns idx 1-19 only — the ranges
+# partition the table and do not overlap.
+
+[table]
+name = "narration_screens"
+type = "pointer"
+
+[encoding]
+table_file = "tables/rbshura_en.tbl"
+terminator = 0xFF
+
+[pointers]
+# $1F:C57F idx 1 = file $1FC581. 19 entries (idx 1-19). 16-bit within-bank
+# pointers (bank $1F) — the renderer and the intro both read this table as
+# 16-bit, so it must stay size=2.
+offset = "$1FC581"
+count = 19
+size = 2
+
+[data]
+# The screens' own region: $1F:C5D9 (first original entry) up to (not into)
+# intro part1 at $1F:C8F1. 792 B; EN content ~579 B. Relocate packs here and
+# rewrites the idx 1-19 pointers. Does NOT touch $1F:C8F1 or the $E0 intro.
+offset = "$1FC5D9"
+end = "$1FC8F1"
+
+[section]
+kind = "script"
+[section.placement]
+mode = "relocate"

@@ -33,16 +33,18 @@ freespace = [
     ["$0975DA", "$097A1B"],   # bank $09: 1089 B
     # Expansion banks $E0-$FF: 2 MB pristine pool. Used after in-ROM space
     # is exhausted. Plenty of headroom for future EN content / patches.
-    # SPLIT around two reservations:
+    # SPLIT around three reservations:
     #   * intro region (file $20:C8F1..$20:DC90, ~5 KB) — see
     #     tables/intro.toml's `[data].end` and `[[fields]]`
+    #   * narration renderer (file $20:DC91..$20:DD90, 256 B) — the relocated
+    #     half-width text renderer; see patches/narration_render.asm (org $E0DC91)
     #   * scen 14 region (file $20:F000..$20:FF00, ~4 KB) — see
     #     tables/scenario_28.toml; the engine redirect in
     #     patches/24bit_ptrs.asm makes scen 14 read its 24-bit L4 table
     #     + strings from $E0:F000 instead of WRAM $7E:C700
     # Allocator skips both reserved holes.
     ["$200000", "$20C8F1"],   # $E0:0000..$E0:C8F0
-    ["$20DC91", "$20E000"],   # $E0:DC91..$E0:DFFF   (post-intro, pre-ScriptGate)
+    ["$20DD91", "$20E000"],   # $E0:DD91..$E0:DFFF   (post-narration-renderer, pre-ScriptGate)
     ["$20E020", "$20F000"],   # $E0:E020..$E0:EFFF   (post-ScriptGate, pre-scen14)
     ["$20FF00", "$400000"],   # $E0:FF00..$FF:FFFF   (post-scen14)
 ]
@@ -113,6 +115,18 @@ file = "patches/scen28_timing.asm"
 [[rom.build.sections]]
 kind = "asar"
 file = "patches/intro_double_render.asm"
+
+# 5b. Post-intro-scroll character-narration screens -> HALF-WIDTH render-at-once.
+# Ported from Peacekeepers (official EN release): the $1F:C57F idx-1-19 glyph-DMA
+# renderer (fadeScreenIn, $05:F18C) is converted to read 1-byte char indices and
+# DMA half-width (8x16) PK-font glyphs, $FF-terminated. The $00C9 dispatch is
+# UNTOUCHED (no Site A/B), so the intro main scroll is unaffected. Routine is
+# relocated to bank $E0 ($E0DC91) and JSL'd (preserves caller PBR). Text data is
+# tables/narration.toml (bank $1F, idx 1-19 region). Supersedes the reverted
+# narration_halfwidth.asm. See docs/ending_narration_plan.md + memory.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/narration_render.asm"
 
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads
