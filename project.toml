@@ -20,11 +20,17 @@ size = "4M"
 # Freespace for relocate-mode 24-bit-ptr allocation. The bump allocator
 # walks ranges in declaration order; the in-ROM-gap entries come first so
 # small holes get filled before we eat into the expansion bank. The
-# bank $08 range starts at $087080, skipping the 24-bit engine stub at
-# $087000..$087030 (plus ~80B safety margin).
+# bank $08 range must skip TWO reservations that live in this bank's
+# freespace: the 24-bit engine stub at $087000..$087030, AND
+# NewIntroRenderer (patches/intro_double_render.asm, org $C87080) which
+# occupies $087080..$087117 (152 B). The range therefore starts at $087180
+# (~100B safety margin past the renderer, in case its size shifts when the
+# !INTRO_BG3_HOFS / DMA-descriptor constants are tuned). Starting at $087080
+# previously let the allocator place scen 3 entry 26 at $C8:7080 — asar then
+# overwrote it with the renderer, so that one string rendered as machine code.
 freespace = [
     ["$1A9CF3", "$1AC003"],   # bank $1A: 8977 B (largest in-ROM run)
-    ["$087080", "$088000"],   # bank $08: 3968 B (after 24-bit ptr engine stub)
+    ["$087180", "$088000"],   # bank $08: 3712 B (after 24-bit stub + NewIntroRenderer)
     ["$1AF2F3", "$1B0001"],   # bank $1A: 3343 B
     ["$0C97FE", "$0CA000"],   # bank $0C: 2050 B
     ["$023800", "$024000"],   # bank $02: 2048 B
