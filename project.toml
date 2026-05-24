@@ -72,14 +72,21 @@ file = "patches/tight_renderer.asm"
 kind = "asar"
 file = "patches/24bit_ptrs.asm"
 
-# 3b. Scen 14 (ending cutscene) script-timing gate. Gates the bank-$85
-# cutscene script player at $85:EE36 on renderer-ready ($1C4A == 0) so
-# longer EN text can finish each entry before the next script step
-# advances L1. Stub at $C8:7080 (32 B). See
-# memory/project_wram_resident_scenarios.md 2026-05-22 for evidence.
+# 3b. Scen 14 (ending cutscene) L1-advance handshake gate. Hooks the bank-$85
+# cutscene script player at $85:EE85 so the $1C48 (entry) advance waits for the
+# renderer's done-sentinel ($1C56=$FFFF) and re-engages it (STZ $1C56), letting
+# longer EN text finish each entry. Stub at $E0:E000. See
+# memory/project_wram_resident_scenarios.md 2026-05-23 for evidence.
 [[rom.build.sections]]
 kind = "asar"
 file = "patches/scen28_script_gate.asm"
+
+# 3c. Scen 14 animation/fade timing tweaks — per-step wait-byte edits in the
+# bank-$DF cutscene script. Edit patches/scen28_timing.asm directly; map steps
+# with tools/dump_scen28_script.py. No-op until tweaks are added.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/scen28_timing.asm"
 
 # 4. Convert intro typewriter → static (PK-style). rbshura's bank $1F has
 # 17 `JSL $80:D8E8` sites (the VBlank-wait routine Jaleco inserted on top
