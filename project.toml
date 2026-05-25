@@ -55,7 +55,11 @@ freespace = [
                               # stub (scen28_script_gate.asm, org $E0E000) now gates $00D5
                               # too and runs to ~$E04x; reserve $E000..$E080 for it. Was
                               # $20E020 — that OVERLAPPED the 55-byte stub (latent collision).
-    ["$20FF00", "$400000"],   # $E0:FF00..$FF:FFFF   (post-scen14)
+    ["$20FF00", "$210000"],   # $E0:FF00..$E0:FFFF   (post-scen14, pre-attack-names)
+    # $E1:0000..$E1:0FFF (file $210000..$211000) reserved for the relocated
+    # attack-name graphics pool (assets/attack_names_e1.bin, ~3.3 KB). See
+    # patches/attack_names_reloc.asm + tools/encode_attack_names.py.
+    ["$211000", "$400000"],   # $E1:1000..$FF:FFFF   (post-attack-names)
 ]
 
 # ---- Inline sections: font + engine patches ----
@@ -145,6 +149,95 @@ file = "patches/intro_dest_bank.asm"
 [[rom.build.sections]]
 kind = "asar"
 file = "patches/narration_render.asm"
+
+# 6. Special-move "attack name" word-art (e.g. Dragon Wave) — relocated to bank
+# $E1 so English plates can exceed the stock 32-tile budget. Each name is a
+# `kind="graphics"` PNG section: retrotool runs SuperFamiconv at build time to
+# 2bpp tiles + a projected 128-entry BG3 tilemap (palette-anchors map furigana
+# colours -> CGRAM pal4, kanji -> pal5; tile-base $E0 = the VRAM slot the loader
+# DMAs into; map-base-entry places the plate in the same screen window as stock).
+# Use the English plate (<idx>_<slug>_en.png) where it exists, the dumped
+# Japanese plate otherwise. The companion asar patch repoints the loader source
+# bank ($CF->$E1), bumps the tile DMA count ($200->$240 = 36 tiles), and rewrites
+# the source-address table $82:DC8C with the $E1 offsets (idx 4 dups dragon_wave).
+# Dump/edit workflow: tools/dump_attack_names.py. See memory/project_attack_names.md.
+#
+# $E1 layout: tiles[i] at $E1:(i*$240); maps[i] at $E1:($900 + i*$100).
+[[rom.build.sections]]
+kind = "graphics"
+file = "export/attack_names/0_thunder_edge_en.png"   # English
+bpp = 2
+offset = "$210000"          # tiles -> $E1:0000
+tile-count = 40
+color-zero = "FF00FF"
+colors = 4
+palettes = 2
+palette-from-png = true       # pack against the PNG's own palette order (match CGRAM)
+map-offset = "$210900"      # tilemap -> $E1:0900
+tile-base = "$80"
+map-cols = 32
+map-entries = 128
+map-base-entry = 2
+priority = true
+palette-anchors = "4:E7E700,5:FF5A08"
+
+[[rom.build.sections]]
+kind = "graphics"
+file = "export/attack_names/1_assault_tiger_en.png"     # Japanese (no EN yet)
+bpp = 2
+offset = "$210240"          # tiles -> $E1:0240
+tile-count = 40
+color-zero = "FF00FF"
+colors = 4
+palettes = 2
+palette-from-png = true       # pack against the PNG's own palette order (match CGRAM)
+map-offset = "$210A00"      # tilemap -> $E1:0A00
+tile-base = "$80"
+map-cols = 32
+map-entries = 128
+map-base-entry = 0
+priority = true
+palette-anchors = "4:E7E700,5:FF5A08"
+
+[[rom.build.sections]]
+kind = "graphics"
+file = "export/attack_names/2_dragon_wave_en.png"       # Japanese (no EN yet)
+bpp = 2
+offset = "$210480"          # tiles -> $E1:0480
+tile-count = 40
+color-zero = "FF00FF"
+colors = 4
+palettes = 2
+palette-from-png = true       # pack against the PNG's own palette order (match CGRAM)
+map-offset = "$210B00"      # tilemap -> $E1:0B00
+tile-base = "$80"
+map-cols = 32
+map-entries = 128
+map-base-entry = 2
+priority = true
+palette-anchors = "4:E7E700,5:FF5A08"
+
+[[rom.build.sections]]
+kind = "graphics"
+file = "export/attack_names/3_bird_storm_en.png"        # Japanese (no EN yet)
+bpp = 2
+offset = "$2106C0"          # tiles -> $E1:06C0
+tile-count = 40
+color-zero = "FF00FF"
+colors = 4
+palettes = 2
+palette-from-png = true       # pack against the PNG's own palette order (match CGRAM)
+map-offset = "$210C00"      # tilemap -> $E1:0C00
+tile-base = "$80"
+map-cols = 32
+map-entries = 128
+map-base-entry = 0
+priority = true
+palette-anchors = "4:E7E700,5:FF5A08"
+
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/attack_names_reloc.asm"
 
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads

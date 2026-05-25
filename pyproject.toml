@@ -4,5 +4,17 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "pip>=26.0.1",
-    "retrotool>=0.8.1",
+    "retrotool",
+    "retrotool-libsfx",
+    "retrotool-asar",
+    "pillow>=12.2.0",
 ]
+
+# Use the local editable retrotool checkout for live edits (build_project,
+# graphics/superfamiconv, asar). The PyPI 0.8.1 wheel lacks retrotool.build
+# and the superfamiconv wrappers. Sub-packages (libsfx = SuperFamiconv binary,
+# asar = assembler) are sourced from the same checkout.
+[tool.uv.sources]
+retrotool = { path = "/mnt/crucial/projects/retrotool", editable = true }
+retrotool-libsfx = { path = "/mnt/crucial/projects/retrotool/packages/retrotool-libsfx", editable = true }
+retrotool-asar = { path = "/mnt/crucial/projects/retrotool/packages/retrotool-asar", editable = true }

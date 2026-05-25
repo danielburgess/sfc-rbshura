@@ -1,0 +1,81 @@
+{
+  "rom": "rbshura_en.sfc",
+  "loader": "$82:DC2B",
+  "table": "$82:DC8C",
+  "bank": "$CF",
+  "tile_dma": {
+    "count": 512,
+    "vram_word": 18176,
+    "bpp": 2
+  },
+  "map_dma": {
+    "count": 256,
+    "vram_word": 23080
+  },
+  "palettes": {
+    "furigana_cgram": "16-19",
+    "kanji_cgram": "20-23"
+  },
+  "entries": [
+    {
+      "index": 0,
+      "reg_12CE": 0,
+      "tile_src": "$CF:3B98",
+      "map_src": "$CF:3FD8",
+      "slug": "thunder_edge",
+      "duplicate_of": null,
+      "png": "0_thunder_edge.png",
+      "size": {
+        "w": 80,
+        "h": 32
+      }
+    },
+    {
+      "index": 1,
+      "reg_12CE": 2,
+      "tile_src": "$CF:3A08",
+      "map_src": "$CF:3ED8",
+      "slug": "assault_tiger",
+      "duplicate_of": null,
+      "png": "1_assault_tiger.png",
+      "size": {
+        "w": 112,
+        "h": 32
+      }
+    },
+    {
+      "index": 2,
+      "reg_12CE": 4,
+      "tile_src": "$CF:3758",
+      "map_src": "$CF:3CD8",
+      "slug": "dragon_wave",
+      "duplicate_of": null,
+      "png": "2_dragon_wave.png",
+      "size": {
+        "w": 80,
+        "h": 32
+      }
+    },
+    {
+      "index": 3,
+      "reg_12CE": 6,
+      "tile_src": "$CF:38A8",
+      "map_src": "$CF:3DD8",
+      "slug": "bird_storm",
+      "duplicate_of": null,
+      "png": "3_bird_storm.png",
+      "size": {
+        "w": 112,
+        "h": 32
+      }
+    },
+    {
+      "index": 4,
+      "reg_12CE": 8,
+      "tile_src": "$CF:3758",
+      "map_src": "$CF:3CD8",
+      "slug": "dragon_wave",
+      "duplicate_of": "dragon_wave"
+    }
+  ]
+}
