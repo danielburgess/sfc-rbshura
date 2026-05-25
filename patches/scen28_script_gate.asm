@@ -32,8 +32,11 @@
 ; ($1C56 low byte negative, i.e. $FF). On advance, do STA $1C48 AND STZ $1C56
 ; (16-bit) to re-engage the renderer, exactly like the bank-$04 path. When the
 ; renderer is still busy ($1C56 low byte >= 0), skip the write and retry next
-; frame. Non-$1C48 writes (portrait / OAM / animation coordinates) pass
-; through untouched, preserving their original timing.
+; frame. The ending FADE-OUT trigger ($00D5=$01) is gated the SAME way (added
+; 2026-05-24) so the fade waits for the line to finish — but, unlike $1C48, it
+; does NOT clear $1C56 (there is no new entry to render). All other writes
+; (portrait / OAM / animation coordinates) pass through untouched, preserving
+; their original timing.
 ;
 ; The $1C56 sentinel is self-limiting: STZ-ing it on advance means the gate
 ; blocks further advances until the renderer renders the new entry AND finishes
@@ -88,31 +91,44 @@ StallCheck:
     REP #$20
     TXA                     ; A = target address (16-bit)
     CMP #$1C48              ; is this the L1-step (entry) advance?
+    BEQ .gated
+    CMP #$00D5              ; is this the ending FADE-OUT trigger ($00D5=$01)?
+    BEQ .gated              ;   (gate it too — fade must wait for the line)
     SEP #$20
-    BEQ .is_l1
 
-    ; --- not L1: original write, continue loop ---
+    ; --- not gated: original write, continue loop ---
     PLA                     ; restore value; S→PCL
     STA $00,X
     BRA .ret_loop
 
-.is_l1:
+.gated:                     ; X = $1C48 (advance) or $00D5 (fade). A 16-bit here.
+    SEP #$20                ; M=8
     LDA $1C56               ; done-sentinel, low byte (8-bit)
-    BMI .l1_advance         ; bit7 set ($FF) = entry complete → advance
+    BMI .do_write           ; bit7 set ($FF) = renderer idle/complete → write
     ; --- renderer still busy: skip write, retry next frame ---
     PLA                     ; restore S→PCL (discard value)
-    STZ $1E95               ; $1E95=0 → next frame re-enters this step
+    STZ $1E95               ; $1E95=0 → next frame re-enters this step.
+                            ; Both gated targets are the FIRST write of their
+                            ; step ($1C48 is a lone slot; $00D5 leads the fade
+                            ; step), so the retry re-runs cleanly with nothing
+                            ; half-applied.
     REP #$20
     LDA #$EEB5
     STA $01,S               ; RTL+1 → $EEB6 (bail)
     SEP #$20
     RTL
 
-.l1_advance:
+.do_write:
     PLA                     ; value; S→PCL
-    STA $00,X               ; STA $1C48 (the advance)
+    STA $00,X               ; perform the gated write ($1C48 or $00D5)
     REP #$20
-    STZ $1C56               ; clear sentinel (16-bit) → renderer re-engages
+    TXA
+    CMP #$1C48              ; only the ENTRY advance re-engages the renderer;
+    SEP #$20
+    BNE .ret_loop           ; the FADE ($00D5) leaves $1C56=$FFFF (no new entry
+                            ; to render — clearing it would stall later writes).
+    REP #$20
+    STZ $1C56               ; $1C48 path: clear sentinel (16-bit) → re-engage
     SEP #$20
     ; fall through to .ret_loop
 
@@ -124,7 +140,16 @@ StallCheck:
     RTL
 
 ; =========================================================================
-; End. Stub ~$E0:E000..~$E0:E035. project.toml reserves $20E000..$20E040.
+; End. Stub ~$E0:E000..~$E0:E04x. project.toml reserves $20E000..$20E080
+; (freespace line for $E0 resumes at $20E080 — keep them in sync if the stub
+; grows). $00D5-gating added 2026-05-24: the ending fade-out (scen28_timing
+; $DFB36C, shared across slots $308/$31A/$514) was firing on its JP-tuned wait
+; while longer EN lines (e.g. entry 33 "Bart sent me packing…", entries 50/51)
+; were still typing → screen cut to black mid-line. Now the fade waits for the
+; same $1C56=$FFFF done-sentinel as the entry advance.
+; CAUTION: this gates EVERY $00D5=$01 in the scen-28 script. It assumes each
+; fade is preceded by text that completes (sets $1C56=$FFFF). If a text-less
+; fade segment ever hangs, exclude it by value/context here.
 ;
 ; FIRST-ENTRY NOTE: if the very first dialog line of scen 28 (entry 0) fails
 ; to render, it means $1C56 is not $FFFF at dialog start so the first advance

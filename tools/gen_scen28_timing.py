@@ -31,8 +31,8 @@ from pathlib import Path
 
 SLOT_TBL = 0xAB22
 DF_FILE = 0x1F0000
-SLOT_LO, SLOT_HI = 0x000, 0x300          # full scen-28 cutscene span (entries 4-33)
-CLUSTER_LO, CLUSTER_HI = 0xB100, 0xBCFF
+SLOT_LO, SLOT_HI = 0x000, 0x520          # full scen-28 cutscene incl. ending fade + epilogue (slots $300+)
+CLUSTER_LO, CLUSTER_HI = 0xB100, 0xC2FF   # widened to cover ending scripts $DFBDxx..$DFC2xx
 EN_TXT = "data/en/scenario_28.txt"
 
 TARGET_NOTES = {

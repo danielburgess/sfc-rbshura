@@ -254,6 +254,87 @@ hirom
 ; org $DFBCE8 : db 96    ; [$0702=$A0, $0715=$00, $0710=$00]  ; @entry 27: "SoundslikethiswretchtheycallKrummbac"
 ; org $DFBCF5 : db 16    ; [$0610=$06]  ; @entry 28: "Hm?!Mister-!Who'reyou?Anallyofjustic"
 ; org $DFBCFB : db 112   ; [$0610=$07]  ; @entry 28: "Hm?!Mister-!Who'reyou?Anallyofjustic"
+; --- ending fade + epilogue (entries 29-51), added 2026-05-24 after widening
+;     tools/gen_scen28_timing.py to SLOT_HI=$520 / CLUSTER_HI=$C2FF. NOTE: the
+;     @entry label is the GENERATOR's index ($1C48-derived); the ROM actually
+;     displays data-entry (label+1) under it (snippet off-by-one). ---
+; org $DFBD02 : db 64    ; [$0612=$00, $062A=$01, $0610=$07]  ; @entry 28: "Hm?!Mister-!Who'reyou?Anallyofjustic"
+; org $DFBD0F : db 0     ; [scene setup x29]  ; @entry 29: "Allrightthen,goodgirl.Let'sgo.Holdon"
+; org $DFBD6A : db 0     ; [scene setup x14]  ; @entry 31: "?!"
+; org $DFBD98 : db 14    ; [$0705=$C7, $0711=$80, $0710=$00]  ; @entry 32: "Bigbrother!"
+; org $DFBDA4 : db 14    ; [$0705=$C8]  ; @entry 32: "Bigbrother!"
+; org $DFBDAB : db 0     ; [$0711=$00]  ; @entry 32: "Bigbrother!"
+; org $DFBDB2 : db 0     ; [scene setup]  ; @entry 32: "Bigbrother!"
+; org $DFBDD7 : db 11    ; [$0712=$01, $0710=$01]  ; @entry 32: "Bigbrother!"
+; org $DFBDE0 : db 11    ; [$0710=$02]  ; @entry 32: "Bigbrother!"
+; org $DFBDE6 : db 11    ; [$0710=$03]  ; @entry 32: "Bigbrother!"
+; org $DFBDEC : db 11    ; [$0710=$04]  ; @entry 32: "Bigbrother!"
+; org $DFBDF3 : db 0     ; [$0712=$00, $0710=$00]  ; @entry 32: "Bigbrother!"
+; org $DFBDFD : db 1     ; [scene setup]  ; @entry 33: ROM shows "Bart sent me packing." (data 34)
+; org $DFBE15 : db 240   ; [$0610=$00, $0612=$01]  ; @entry 33: "Bart sent me packing." (hold)
+; org $DFBE1E : db 176   ; [(no writes)]  ; @entry 33: "Bart sent me packing." (hold)
+; org $DFBE21 : db 0     ; [$0600=$00, $0612=$00]  ; @entry 33
+; org $DFBE2B : db 1     ; [scene setup]  ; @entry 33
+; org $DFBE43 : db 240   ; [$0710=$00, $0712=$01]  ; @entry 33 (hold)
+; org $DFBE4C : db 176   ; [(no writes)]  ; @entry 33 (hold)
+; org $DFBE4F : db 0     ; [$0700=$00, $0712=$00]  ; @entry 33
+; org $DFBE59 : db 1     ; [scene setup]  ; @entry 33
+; org $DFBE92 : db 240   ; [$0810=$00, $0610=$00, $0812=$01, $0612=$01]  ; @entry 33 (hold)
+; org $DFBEA1 : db 176   ; [(no writes)]  ; @entry 33 (hold)
+; org $DFBEA4 : db 0     ; [$0800=$00, $0600=$00, $0812=$00, $0612=$00]  ; @entry 33
+; org $DFBEB4 : db 1     ; [scene setup]  ; @entry 33
+; org $DFBEF3 : db 240   ; [$0710=$00, $0610=$00, $0712=$01, $0612=$01]  ; @entry 33 (hold)
+; org $DFBF02 : db 176   ; [(no writes)]  ; @entry 33 (hold)
+; org $DFBF05 : db 0     ; [$0700=$00, $0712=$00, $0600=$00, $0612=$00]  ; @entry 33
+; org $DFBF15 : db 1     ; [scene setup]  ; @entry 33
+; org $DFBF33 : db 240   ; [$0710=$00, $0712=$01]  ; @entry 33 (hold)
+; org $DFBF3C : db 176   ; [(no writes)]  ; @entry 33 (hold)
+; org $DFBF3F : db 0     ; [$0700=$00, $0712=$00]  ; @entry 33
+; org $DFBF49 : db 1     ; [scene setup]  ; @entry 33
+; org $DFBF6D : db 240   ; [$0610=$00, $0612=$01]  ; @entry 33 (hold)
+; org $DFBF76 : db 176   ; [(no writes)]  ; @entry 33 (hold)
+; org $DFBF79 : db 0     ; [$0600=$00, $0612=$00]  ; @entry 33
+; org $DFBF83 : db 1     ; [scene setup]  ; @entry 33
+; org $DFBFA7 : db 240   ; [$0610=$00, $0612=$01]  ; @entry 33 (hold)
+; org $DFBFB0 : db 176   ; [(no writes)]  ; @entry 33 (hold)
+; org $DFBFB3 : db 0     ; [$0600=$00, $0612=$00]  ; @entry 33
+; org $DFBFBD : db 241   ; [(no writes)]  ; @entry 33 (final hold before transition)
+; org $DFBFC0 : db 176   ; [(no writes)]  ; @entry 33 (final hold before transition)
+; org $DFBFC4 : db 0     ; [scene setup]  ; @entry 39: "No.ItcamefromDr.Barkley'svault.Wefou"
+; org $DFC031 : db 14    ; [$0610=$09]  ; @entry 39
+; org $DFC037 : db 14    ; [$0610=$0A]  ; @entry 39
+; org $DFC03D : db 14    ; [$0610=$0B]  ; @entry 39
+; org $DFC043 : db 14    ; [$0610=$0C]  ; @entry 39
+; org $DFC049 : db 14    ; [$0610=$0D]  ; @entry 39
+; org $DFC04F : db 14    ; [$0610=$0E]  ; @entry 39
+; org $DFC056 : db 0     ; [scene setup]  ; @entry 44: "Isee...thankgoodness.I'mgladaboveall"
+; org $DFC07E : db 0     ; [scene setup]  ; @entry 46: "CanIevergoback...Tobeinganordinaryhu"
+; org $DFC094 : db 0     ; [scene setup]  ; @entry 48: "Thatcan'tbe!TheremustbeSOMEway,mustn"
+; org $DFC0AA : db 0     ; [scene setup]  ; @entry 50: "Elfin,it'sallright...Truly.Thepromis"
+; org $DFC0C0 : db 0     ; [scene setup]  ; @entry 50
+; org $DFC0D6 : db 1     ; [scene setup]  ; @entry 50
+; org $DFC0EB : db 0     ; [$0810=$00]  ; @entry 50
+; org $DFC0F2 : db 0     ; [scene setup]  ; @entry 50
+; org $DFC105 : db 128   ; [scene setup + $1902/$1269/$126B]  ; @entry 51: "IfIweretobecomelikeVelk...Theremight"
+; org $DFC14B : db 10    ; [$0710=$01, $0712=$FF, $0713=$FF]  ; @entry 51
+; org $DFC157 : db 10    ; [$0710=$02]  ; @entry 51
+; org $DFC15D : db 10    ; [$0710=$03]  ; @entry 51
+; org $DFC163 : db 10    ; [$0710=$04]  ; @entry 51
+; org $DFC169 : db 10    ; [$0710=$05]  ; @entry 51
+; org $DFC16F : db 10    ; [$0710=$06]  ; @entry 51
+; org $DFC176 : db 128   ; [$0710=$07, $0712=$00, $0713=$00]  ; @entry 51 (hold)
+; org $DFC182 : db 240   ; [$0610=$07]  ; @entry 51 (hold)
+; org $DFC188 : db 240   ; [(no writes)]  ; @entry 51 (final hold before transition)
+; org $DFC1F9 : db 10    ; [$0610=$01, $0710=$01 ...]  ; @entry 51 (post-transition walk)
+; org $DFC20E : db 10    ; [$0610=$02, $0710=$02]  ; @entry 51
+; org $DFC217 : db 10    ; [$0610=$03, $0710=$03]  ; @entry 51
+; org $DFC220 : db 10    ; [$0610=$04, $0710=$04]  ; @entry 51
+; org $DFC229 : db 10    ; [$0610=$05, $0710=$05]  ; @entry 51
+; org $DFC232 : db 10    ; [$0610=$06, $0710=$06]  ; @entry 51
+; org $DFC23C : db 0     ; [$0610=$07 ...]  ; @entry 51
+; --- SHARED fade/hold fragments reused by the ending (see also entries 5-32) ---
+; org $DFB49B : db 228   ; [(no writes)]  ; ** SHARED hold, also @entries 5-31 — bumping affects all
+; org $DFB36C : db 254   ; [$00D5=$01, $00D4=$00, $05F0=$00, $05F1=$00]  ; ** SHARED FADE-OUT trigger (slots $308/$31A/$514) — already near max(255), also @entries 8-32
 
 ; ===== END generated reference — ACTIVE tweaks below (override the reference) =====
 org $DFBADF : db 70    ; [$0710=$0B]  ; @entries 22-23: "Krummbach'sambition...Wemustcrushit!"
@@ -261,7 +342,5 @@ org $DFBB13 : db 22    ; [$0712=$00, $0713=$00, $0810=$45]  ; @entry 23: "Thesea
 org $DFBB46 : db 16  ; [$0612=$00, $0614=$00, $0615=$00, $0616=$00, $0610=$07]  ; @entry 24: "Grandpa?"
 org $DFBCF5 : db 80    ; [$0610=$06]  ; @entry 28: "Hm?!Mister-!Who'reyou?Anallyofjustic"
 org $DFBCFB : db 122 ;  [$0610=$07]  ; @entry 28: "Hm?!Mister-!Who'reyou?Anallyofjustic"
-; org $DFB4A6 : db 92  ; [$0710=$48]  ; @entry 6: "Fatherrr!!"
 org $DFB49F : db 74   ; [$0610=$03]  ; @entry 5: "...Listenwell,Dick.P...promiseme...Y"
-; org $DFB79E : db 91    ; [$0910=$05]  ; @entry 13: "I'msorry,Kythring.Thingshavetakenate"
 org $DFB79E : db 31    ; [$0910=$05]  ; @entry 13: "I'msorry,Kythring.Thingshavetakenate"

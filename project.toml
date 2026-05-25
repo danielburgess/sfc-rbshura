@@ -51,7 +51,10 @@ freespace = [
     # Allocator skips both reserved holes.
     ["$200000", "$20C8F1"],   # $E0:0000..$E0:C8F0
     ["$20DD91", "$20E000"],   # $E0:DD91..$E0:DFFF   (post-narration-renderer, pre-ScriptGate)
-    ["$20E020", "$20F000"],   # $E0:E020..$E0:EFFF   (post-ScriptGate, pre-scen14)
+    ["$20E080", "$20F000"],   # $E0:E080..$E0:EFFF   (post-ScriptGate, pre-scen14). ScriptGate
+                              # stub (scen28_script_gate.asm, org $E0E000) now gates $00D5
+                              # too and runs to ~$E04x; reserve $E000..$E080 for it. Was
+                              # $20E020 — that OVERLAPPED the 55-byte stub (latent collision).
     ["$20FF00", "$400000"],   # $E0:FF00..$FF:FFFF   (post-scen14)
 ]
 
@@ -121,6 +124,15 @@ file = "patches/scen28_timing.asm"
 [[rom.build.sections]]
 kind = "asar"
 file = "patches/intro_double_render.asm"
+
+# 5a2. Finish the intro/ending relocation: flip the engine text-setup's
+# dest-word read DBR ($05:F325) from $DF to $E0 so each block's leading VRAM
+# dest word is read from the SAME relocated bank ($E0) as the text. Without
+# this the Maria ending (intro part2) read a garbage dest from $1F:D110 and
+# filled the screen with garbage. See the patch header for full detail.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/intro_dest_bank.asm"
 
 # 5b. Post-intro-scroll character-narration screens -> HALF-WIDTH render-at-once.
 # Ported from Peacekeepers (official EN release): the $1F:C57F idx-1-19 glyph-DMA
