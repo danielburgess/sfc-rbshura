@@ -168,7 +168,7 @@ kind = "graphics"
 file = "export/attack_names/0_thunder_edge_en.png"   # English
 bpp = 2
 offset = "$210000"          # tiles -> $E1:0000
-tile-count = 40
+tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
 color-zero = "FF00FF"
 colors = 4
 palettes = 2
@@ -186,7 +186,7 @@ kind = "graphics"
 file = "export/attack_names/1_assault_tiger_en.png"     # Japanese (no EN yet)
 bpp = 2
 offset = "$210240"          # tiles -> $E1:0240
-tile-count = 40
+tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
 color-zero = "FF00FF"
 colors = 4
 palettes = 2
@@ -204,7 +204,7 @@ kind = "graphics"
 file = "export/attack_names/2_dragon_wave_en.png"       # Japanese (no EN yet)
 bpp = 2
 offset = "$210480"          # tiles -> $E1:0480
-tile-count = 40
+tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
 color-zero = "FF00FF"
 colors = 4
 palettes = 2
@@ -222,7 +222,7 @@ kind = "graphics"
 file = "export/attack_names/3_bird_storm_en.png"        # Japanese (no EN yet)
 bpp = 2
 offset = "$2106C0"          # tiles -> $E1:06C0
-tile-count = 40
+tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
 color-zero = "FF00FF"
 colors = 4
 palettes = 2
