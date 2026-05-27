@@ -4,22 +4,23 @@
 Checks:
   1. Same entry count per scenario.
   2. Each entry header `<<$ptr:idx[$data]>>` is identical between jp/en.
-  3. Every EN body ends with `[F7][XX]` (terminator preserved).
-  4. No leftover mnemonics ({SPD}, {NL}, {FC}, etc.) in EN bodies.
-  5. Translated entries differ from JP; untranslated entries match JP exactly.
+  3. Translated entries that carry an `[F7][XX]` terminator keep it intact.
+     (Not every entry ends in `[F7][XX]` — ~40% legitimately don't — so this
+     is only checked on translated entries that contain one in JP.)
+  4. No leftover text_tool mnemonics ({SPD}, {NL}, {FC}, etc.) in any body.
+  5. Reports translated vs untranslated counts (informational, not a pass/fail).
 """
 from __future__ import annotations
 import re
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).parent
-DATA_JP = ROOT / "data" / "jp"
-DATA_EN = ROOT / "data" / "en"
+from _paths import DATA_JP, DATA_EN
 
 HEADER_RE = re.compile(r"^<<\$\d+:\d+\[\$\d+\]>>$")
 MNEMONIC_RE = re.compile(r"\{(NL|PB|SPD|PORT|WIN|FC)(?::|})")
-TERMINATOR_RE = re.compile(r"\[F7\]\[[0-9A-F]{2}\]")
+# Case-insensitive: a hand-edited lowercase `[f7][ff]` is still a valid
+# terminator and must not be misreported as missing.
+TERMINATOR_RE = re.compile(r"\[F7\]\[[0-9A-F]{2}\]", re.IGNORECASE)
 
 
 def parse_entries(text: str) -> list[tuple[str, str]]:
@@ -63,17 +64,25 @@ def main() -> int:
             if jp_h != en_h:
                 errors.append(f"{en_file.name}: entry {idx} header mismatch")
                 continue
+
+            # Leftover text_tool mnemonics are illegal in ANY retrotool-format
+            # body (jp or en), so check every entry regardless of translation
+            # state — an entry that regressed to JP bytes shouldn't escape this.
+            if MNEMONIC_RE.search(en_b):
+                errors.append(
+                    f"{en_file.name}: entry {idx} leftover mnemonic in EN: {en_b[:80]!r}"
+                )
+
             if jp_b == en_b:
                 untranslated += 1
                 continue
             translated += 1
-            if not TERMINATOR_RE.search(en_b):
+            # Terminator check only where JP actually had one: ~40% of entries
+            # legitimately end without [F7][XX], so requiring it everywhere
+            # would be a false positive. If JP carried it, EN must keep it.
+            if TERMINATOR_RE.search(jp_b) and not TERMINATOR_RE.search(en_b):
                 errors.append(
-                    f"{en_file.name}: entry {idx} EN body has no [F7][XX] terminator: {en_b[:80]!r}"
-                )
-            if MNEMONIC_RE.search(en_b):
-                errors.append(
-                    f"{en_file.name}: entry {idx} leftover mnemonic in EN: {en_b[:80]!r}"
+                    f"{en_file.name}: entry {idx} dropped its [F7][XX] terminator: {en_b[:80]!r}"
                 )
 
         translated_total += translated

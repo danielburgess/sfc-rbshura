@@ -25,7 +25,7 @@ terminator = 0xFF
 # at $E0:F000 — see project.toml's freespace split. Engine reads via
 # patches/24bit_ptrs.asm's 24-bit path (taken because $05:8088 is now $E0
 # instead of $7E, so the BEQ .legacy16 doesn't fire for scen 14).
-offset = "$E0F000"
+offset = "$20F000"
 count = 77
 size = 3
 
@@ -35,8 +35,8 @@ size = 3
 # context: the L4 table itself occupies $E0:F000..$E0:F0E6 (77 × 3 B);
 # strings get scattered into freespace by retrotool, with each L4 entry
 # updated to point to its allocated location.
-offset = "$E0F0E7"
-end = "$E0FF00"
+offset = "$20F0E7"
+end = "$20FF00"
 
 [section]
 kind = "script"

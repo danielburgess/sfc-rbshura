@@ -199,8 +199,8 @@ TRANSLATIONS: dict[int, dict[int, str]] = {
         23: "!![FD]It's going to blow![F7][FF][FB][15]",
         24: "[FC][01][01][F8][01]Why are[FD]Metal Frames here?[F7][FF][FB][15]",
         25: "[FC][01][01][F8][01]How can[FD]Metal Frames be here?[F7][FF][FB][15]",
-        26: "Port![[FD]We're saved![F7][FF][FB][15]",
-        27: "Port![[FD]We're saved![F7][FF][FB][15]",
+        26: "Port![FD]We're saved![F7][FF][FB][15]",
+        27: "Port![FD]We're saved![F7][FF][FB][15]",
         28: "[FC][01][01][F8][01]You mean to sink us[FD]along with the ship?[F7][FF][FB][15]",
     },
     # =====================================================================

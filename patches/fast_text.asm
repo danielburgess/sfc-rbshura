@@ -1,4 +1,10 @@
 ; -----------------------------------------------------------------------------
+; ⚠ ORPHAN / NOT IN BUILD (codereview.md L2, 2026-05-26). This patch is NOT
+; referenced by any [[rom.build.sections]] in project.toml. It edits the same
+; $05:80xx dialog region as the LIVE tight_renderer.asm + 24bit_ptrs.asm, so
+; re-enabling it requires ordering/overlap review (asar silently overwrites on
+; org collisions). Kept for reference; do not add to the build without auditing.
+; -----------------------------------------------------------------------------
 ; Rushing Beat Shura — Fast Text Patch (iteration 1: wait-gate bypass only)
 ; -----------------------------------------------------------------------------
 ; This is the minimal version — just bypass the per-character wait gate.

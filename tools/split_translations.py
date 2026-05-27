@@ -22,11 +22,10 @@ from pathlib import Path
 
 from retrotool.script.table import Table
 
-ROOT = Path(__file__).parent
-DUMP_TRANSLATED = ROOT / "text" / "dialogue_dump_translated.txt"
-DATA_JP = ROOT / "data" / "jp"
-DATA_EN = ROOT / "data" / "en"
-RBSHURA_TBL = ROOT / "tables" / "rbshura.tbl"
+from _paths import ROOT, TEXT, DATA_JP, DATA_EN, TABLES
+
+DUMP_TRANSLATED = TEXT / "dialogue_dump_translated.txt"
+RBSHURA_TBL = TABLES / "rbshura.tbl"
 
 # ---------------------------------------------------------------------------
 # Merge-conflict resolution

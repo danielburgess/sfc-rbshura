@@ -10,15 +10,15 @@ terminator = 0xFF
 # 24-bit LE HiROM pointers (46 entries). Widened 2026-05-17 — see
 # [[project_24bit_ptr_methodology]]. [data] block below is informational
 # only; the relocate handler routes every entry to [rom.build].freespace.
-offset = "$879062"
+offset = "$079062"
 count = 46
 size = 3
 
 [data]
 # Bank $87 upper-half ROM region. Permissive bounds — scenarios
 # share strings within a bank; tighten when build-side ownership matters.
-offset = "$8790BE"
-end = "$879516"
+offset = "$0790BE"
+end = "$079516"
 
 [section]
 kind = "script"

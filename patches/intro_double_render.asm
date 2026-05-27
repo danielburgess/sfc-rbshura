@@ -157,6 +157,10 @@ NewIntroRenderer:
 .done:
     RTL                     ; long return (called via JSL)
 
+; Build-time guard: renderer must stay below the bank-$08 freespace start
+; ($C8:7180, per project.toml's freespace[1]).
+assert pc() <= $C87180, "NewIntroRenderer overflowed into bank-$08 freespace ($C87180)"
+
 ; -----------------------------------------------------------------------------
 ; Outer driver patch — make rbshura's outer at $05:EFFA-$F005 emit two
 ; renderer calls instead of falling through once. The pre-existing

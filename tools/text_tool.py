@@ -2,6 +2,12 @@
 """
 text_tool.py — Rushing Beat Shura text extraction and insertion toolkit.
 
+⚠ SUPERSEDED for INSERTION (codereview.md H5, 2026-05-26) — do NOT use the
+`insert`/`font-import` commands to write ROMs. The live build is retrotool
+`build_project()` (project.toml). The insert/encode paths here do lossy
+control-code round-trips and ignore the 4-level pointer chain. `dump`/`stats`
+remain usable for JP-source analysis.
+
 Commands:
     python text_tool.py dump <rom> <output.txt>      — Dump all JP text
     python text_tool.py insert <rom> <input.txt> <output_rom>  — Insert translated text

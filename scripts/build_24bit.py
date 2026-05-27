@@ -18,13 +18,12 @@ ROOT = Path(__file__).parent.parent
 
 def main() -> None:
     from retrotool.build import build_project
-    result = build_project(
-        path=str(ROOT),
-        output=str(ROOT / "rbshura_en_24bit.sfc"),
-        no_cache=True,
-    )
-    print(f"  → rbshura_en_24bit.sfc · {result.rom_size:,} B "
-          f"· {len(result.sections)} sections · ${result.checksum:04X}")
+    # No explicit output= : the path is derived from [rom].name +
+    # [rom.build].output_dir in project.toml (→ out/rbshura_en.sfc).
+    # build_project() prints its own summary (resolved path + checksum).
+    result = build_project(path=str(ROOT), no_cache=True)
+    print(f"  → {result.rom_size:,} B · {len(result.sections)} sections "
+          f"· ${result.checksum:04X}")
 
 
 if __name__ == "__main__":

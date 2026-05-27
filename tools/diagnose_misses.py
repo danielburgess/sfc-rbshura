@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Diagnose which JP→EN substitutions failed to match anywhere."""
-from pathlib import Path
 import split_translations as st
 
-ROOT = Path(__file__).parent
-DATA_JP = ROOT / "data" / "jp"
+from _paths import DATA_JP
 
 raw = st.DUMP_TRANSLATED.read_text(encoding="utf-8")
 resolved = st.resolve_conflicts(raw)

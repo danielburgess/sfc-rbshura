@@ -23,9 +23,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-ROOT = Path(__file__).parent
-PK_ROM = ROOT / "peacekeepers.sfc"
-FONT_BIN = ROOT / "fonts" / "rbshura_en.bin"
+from _paths import ROOT, PK_ROM, FONTS, TABLES, DATA_EN
+
+FONT_BIN = FONTS / "rbshura_en.bin"
 
 PK_CHAR_BYTES = 32          # PK native: 8x16 glyph = top tile + bottom tile
 JP_CHAR_BYTES = 64          # rbshura slot stride (only first 32B DMA'd
@@ -107,14 +107,18 @@ def _unmapped_chars_in_en_scripts() -> list[str]:
     import re
     mapped = set(LATIN_MAP.values()) | {ch for ch, _ in ALIASES} | {' ', '\n', '\t', '\r'}
     found: dict[str, None] = {}
-    for f in sorted((ROOT / "data" / "en").glob("scenario_*.txt")):
+    for f in sorted(DATA_EN.glob("scenario_*.txt")):
         body = f.read_text(encoding="utf-16")
         body = re.sub(r"<<\$\d+:\d+\[\$\d+\]>>", "", body)
         body = re.sub(r"\[[0-9A-Fa-f]{2}\]", "", body)
         for ch in body:
             if ch not in mapped:
                 found[ch] = None
-    return list(found.keys())
+    # Sorted so the generated .tbl tail is deterministic regardless of file
+    # traversal order (avoids spurious diffs when EN scripts change). The
+    # unmapped→$00 (space) fallback itself is intentional per user directive
+    # 2026-05-16; this only stabilizes the ordering.
+    return sorted(found.keys())
 
 
 def build_font_bin(pk_rom: bytes) -> bytes:
@@ -181,6 +185,11 @@ def write_en_table(path: Path) -> None:
 def main() -> None:
     argparse.ArgumentParser().parse_args()  # accept --help; no flags
 
+    if not PK_ROM.exists():
+        raise SystemExit(
+            f"PK reference ROM not found: {PK_ROM}\n"
+            "Expected the Peacekeepers ROM at roms/peacekeepers.sfc."
+        )
     pk = PK_ROM.read_bytes()
     font_bin = build_font_bin(pk)
 
@@ -200,7 +209,7 @@ def main() -> None:
     print(f"Wrote {FONT_BIN.relative_to(ROOT)} ({len(font_bin)} bytes, "
           f"{N_GLYPHS} slots, {len(CUSTOM_GLYPHS)} custom glyphs)")
 
-    en_table_path = ROOT / "tables" / "rbshura_en.tbl"
+    en_table_path = TABLES / "rbshura_en.tbl"
     write_en_table(en_table_path)
     print(f"Wrote {en_table_path.relative_to(ROOT)}")
 

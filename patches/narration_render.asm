@@ -171,3 +171,7 @@ NarrationHalfWidth:
 
 .done:
     RTL                         ; DBR restored to ambient; PBR preserved by JSL
+
+; Build-time guard: stub must stay within its 256 B reservation
+; ($20DC91..$20DD91; project.toml freespace resumes at $20DD91 = $E0:DD91).
+assert pc() <= $E0DD91, "NarrationHalfWidth overflowed its 256B reservation ($E0DD91)"

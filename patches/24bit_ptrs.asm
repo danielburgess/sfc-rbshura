@@ -62,15 +62,16 @@ org $C581A1                 ; HiROM $C5:81A1 = file $058 1A1
 ; stays the same.
 
 ; =========================================================================
-; 1b. ROM size header byte at $00:FFD7 — bump from $0E (16 Mbit/2 MB) to
-;     $0F (32 Mbit/4 MB) so emulators recognize the expanded ROM. retrotool's
-;     post-build _pad_to_next_size pads the file to 4 MB; retrotool's
-;     _patch_checksum recomputes the checksum (it sees the updated size byte
-;     in its sum). Without this, emulators may complain or treat the file as
-;     a 2 MB ROM with garbage tail.
+; 1b. ROM size header byte at $00:FFD7 — set to $0C (4 MB) for the expanded
+;     ROM. The byte is log2(size in KB): $0B = 2 MB (pristine), $0C = 4 MB,
+;     $0F = 32 MB. (It was mistakenly $0F = 32 MB before 2026-05-26.)
+;     retrotool's post-build _pad_to_next_size pads the file to 4 MB and
+;     _patch_checksum recomputes the checksum over the corrected size byte.
+;     Mesen/Snes9x size from file length so the stale value loaded anyway,
+;     but strict tools / flash carts / ROM databases read this field.
 ; =========================================================================
 
-org $00FFD7 : db $0F
+org $00FFD7 : db $0C
 
 org $C581B3 : db $B7    ; main per-char dispatch read
 org $C581FF : db $B7    ; FA-prefix param read
@@ -225,6 +226,9 @@ L4_Deref_24:
     LDA [$00],Y             ; 16-bit string ptr from WRAM L4 table
     STA $00                 ; $00/$01 = string ptr; $02 keeps DBR
     RTL
+
+; Build-time guard: this stub must stay below NewIntroRenderer at $C8:7080.
+assert pc() <= $C87080, "L4_Deref_24 overflowed into NewIntroRenderer ($C87080)"
 
 ; -----------------------------------------------------------------------------
 ; End of patch. Caller's next instruction at $0581AB (REP #$10) is a no-op

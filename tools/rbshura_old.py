@@ -1,3 +1,11 @@
+"""SUPERSEDED — DO NOT USE. The live toolkit is tools/rbshura.py (retrotool-
+backed LZSS codec); the live build is retrotool `build_project()`.
+
+Quarantined 2026-05-26 (codereview.md H5). This module's hand-rolled `compress`
+is NOT a guaranteed inverse of its `decompress` for overlapping matches, the
+decompressor has a boundary off-by-one, and `compress_file` uses an
+engine-incompatible scheme. Kept for historical reference only.
+"""
 import os
 import sys
 

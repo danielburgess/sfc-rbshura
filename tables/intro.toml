@@ -52,11 +52,15 @@ terminator = 0xFF
 #
 # File offsets ($1F:C8F1 → $E0:C8F1 = file $20:C8F1).
 # `end` bounds total auto-packed size; current encoded content is ~3 KB
-# (part1 ≈ 1957 B + part2 ≈ 1052 B). The 5 KB envelope leaves headroom
-# for translation expansion. If you bump this further, also update the
-# matching freespace split in project.toml.
+# (part1 ≈ 1957 B + part2 ≈ 1052 B). End deliberately stops at $20DB00 —
+# NOT $20DC91 — to leave a ~400 B gap before the narration renderer at
+# $E0:DC91 (patches/narration_render.asm). retrotool raises on overflow, so
+# this makes an over-budget intro fail the build WITH margin instead of
+# packing right up against the renderer's first byte. ~1.6 KB headroom
+# remains over current content. If you bump this, also update the matching
+# freespace split in project.toml.
 offset = "$20C8F1"
-end = "$20DC91"
+end = "$20DB00"
 
 [section]
 kind = "fixed-records"

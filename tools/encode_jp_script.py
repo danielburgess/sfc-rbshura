@@ -114,8 +114,12 @@ def main() -> None:
     text = args.input.read_text(encoding="utf-16")
     # Split on headers; even indices are bodies between/around headers.
     parts = HEADER_RE.split(text)
-    # parts[0] is leading text (usually empty); subsequent entries are bodies.
-    bodies = [p for p in parts[1:] if p.strip()]
+    # parts[0] is leading text (usually empty); subsequent entries are bodies,
+    # ONE per header. Keep them positionally — do NOT drop whitespace-only
+    # bodies, or `--entry N` would index the wrong entry (an empty body simply
+    # encodes to zero bytes). Terminators are NOT appended here: the source
+    # dumps already carry the entry terminator as a literal `[FF]` token.
+    bodies = parts[1:]
 
     out = bytearray()
     if args.entry is not None:

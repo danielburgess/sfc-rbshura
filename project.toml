@@ -1,15 +1,18 @@
+# Rushing Beat Shura - English Translation
+# MAIN PROJECT FILE
+
 # Top-level scalars MUST come before any [section] header in TOML.
 data_dirs = ["tables"]
 jp_data_dir = "data/jp"
 en_data_dir = "data/en"
 
 [rom]
-name = "rbshura"
+name = "rbshura_en"
 # Pristine JP source. Every transformation that turns it into the EN ROM
 # (PK font, tight renderer, 24-bit pointer engine, char_names, 14 scenarios)
 # is expressed below as a [[rom.build.sections]] entry. The build is one
 # retrotool `build_project()` call — no Python pre-steps.
-file = "rbshura.sfc"
+file = "roms/rbshura.sfc"
 mapping = "hirom"
 # Expanded from 2 MB → 4 MB. HiROM addresses banks $C0-$FF (file 0..$3FFFFF).
 # Banks $E0-$FF (file $200000..$3FFFFF) are pristine expansion space and
@@ -17,6 +20,11 @@ mapping = "hirom"
 size = "4M"
 
 [rom.build]
+# Default output directory (retrotool ≥ 2026-05-26): the built ROM lands at
+# <output_dir>/<rom.name>.sfc = out/rbshura_en.sfc when build_24bit.py /
+# `retrotool build` is run without an explicit output path. retrotool creates
+# the folder if missing.
+output_dir = "out"
 # Freespace for relocate-mode 24-bit-ptr allocation. The bump allocator
 # walks ranges in declaration order; the in-ROM-gap entries come first so
 # small holes get filled before we eat into the expansion bank. The
@@ -183,7 +191,7 @@ palette-anchors = "4:E7E700,5:FF5A08"
 
 [[rom.build.sections]]
 kind = "graphics"
-file = "export/attack_names/1_assault_tiger_en.png"     # Japanese (no EN yet)
+file = "export/attack_names/1_assault_tiger_en.png"
 bpp = 2
 offset = "$210240"          # tiles -> $E1:0240
 tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
@@ -201,7 +209,7 @@ palette-anchors = "4:E7E700,5:FF5A08"
 
 [[rom.build.sections]]
 kind = "graphics"
-file = "export/attack_names/2_dragon_wave_en.png"       # Japanese (no EN yet)
+file = "export/attack_names/2_dragon_wave_en.png"
 bpp = 2
 offset = "$210480"          # tiles -> $E1:0480
 tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
@@ -219,7 +227,7 @@ palette-anchors = "4:E7E700,5:FF5A08"
 
 [[rom.build.sections]]
 kind = "graphics"
-file = "export/attack_names/3_bird_storm_en.png"        # Japanese (no EN yet)
+file = "export/attack_names/3_bird_storm_en.png"
 bpp = 2
 offset = "$2106C0"          # tiles -> $E1:06C0
 tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps

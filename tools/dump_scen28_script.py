@@ -32,12 +32,21 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from _paths import BUILT_ROM
+
 SLOT_TBL = 0xAB22          # $DF:AB22
 DF_BANK_FILE = 0x1F0000    # HiROM: $DF:xxxx → file $1Fxxxx
 
 
 def load(rom_path: str) -> bytes:
-    return Path(rom_path).read_bytes()
+    p = Path(rom_path)
+    if not p.exists():
+        raise SystemExit(
+            f"ROM not found: {p}\n"
+            "This tool reads the BUILT EN ROM's cutscene script. "
+            "Rebuild it first: python scripts/build_24bit.py"
+        )
+    return p.read_bytes()
 
 
 def df(rom: bytes, addr: int) -> int:
@@ -66,18 +75,24 @@ def decode_script(rom: bytes, base: int, max_steps: int = 64):
             writes.append((a, df(rom, p + 2)))
             p += 3
             guard += 1
+        else:
+            print(f"# WARNING: step @$DF:{base + start:04X} hit the 64-write cap "
+                  "with no FFFF terminator — output may be truncated", file=sys.stderr)
         # peek the byte after FF FF: $FF = slot end, else = next step's wait
         slot_end = df(rom, p) == 0xFF
         steps.append((start, wait, writes, slot_end))
         if slot_end:
             break
         off = p - base   # next step starts AT this byte (its wait)
+    else:
+        print(f"# WARNING: slot @$DF:{base:04X} hit the {max_steps}-step cap "
+              "with no slot-end marker — output may be truncated", file=sys.stderr)
     return steps
 
 
 def main() -> None:
     args = sys.argv[1:]
-    rom_path = "rbshura_en_24bit.sfc"
+    rom_path = str(BUILT_ROM)
     lo, hi = 0x196, 0x1FE
     i = 0
     while i < len(args):

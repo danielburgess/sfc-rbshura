@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Encode narration screens (character endings) back into the glyph-stream
+"""SUPERSEDED (codereview.md L5, 2026-05-26) — the live narration path is
+tools/gen_narration_source.py + tables/narration.toml, built by retrotool.
+The `--verify` round-trip here is tautological for unmapped glyphs (always
+reports OK). Kept for reference only; do not rely on it.
+
+Encode narration screens (character endings) back into the glyph-stream
 format the $05:F18E renderer consumes, for EN re-insertion.
 
 Screen format (in the $1F:C57F pointer table, idx 1-19):

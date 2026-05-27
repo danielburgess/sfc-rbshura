@@ -12,7 +12,10 @@ Output: `data/jp/scenario_NN.txt`, UTF-16 LE BOM, with per-entry headers
 """
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
+
+from _paths import PRISTINE_ROM, TABLES, DATA_JP
 
 from retrotool import Rom
 from retrotool.core.address import SFCAddressType
@@ -29,6 +32,13 @@ from retrotool.script.table import Table
 # 14 scenarios: (id, bank, ptr_table_snes_addr_low16, pointer_count, data_end_pc)
 # Counts verified empirically against the live ROM (see project memory).
 # Scenario 28 (bank $7E WRAM) is dynamic — excluded.
+#
+# NOTE: pointer width is hardcoded 2 bytes in the DataDef below (size=2). That
+# is correct here because this tool ALWAYS dumps the PRISTINE JP source
+# (roms/rbshura.sfc), where every L4 table — including scen 14 — is still
+# 16-bit. The EN ROM widens scen 14 to 24-bit (tables/scenario_14.toml,
+# size=3); do NOT point this tool at a built EN ROM (it can't, since main()
+# hardcodes PRISTINE_ROM) or the 16-bit walk would misread scen 14.
 SCENARIOS: list[tuple[int, int, int, int]] = [
     (0,  0x85, 0x86E4, 59),
     (2,  0x85, 0x8FD0, 42),
@@ -66,7 +76,7 @@ def dump_scenario(rom_bytes: bytes, table: Table, scen: int, bank: int,
         name=f"scenario_{scen:02d}",
         type="pointer",
         encoding=EncodingSection(
-            table_file=Path("tables/rbshura.tbl"),
+            table_file=TABLES / "rbshura.tbl",
             terminator=0xFF,
         ),
         pointers=PointersSection(offset=ptr_table_pc, count=count, size=2),
@@ -84,10 +94,35 @@ def dump_scenario(rom_bytes: bytes, table: Table, scen: int, bank: int,
 
 
 def main() -> None:
-    rom = Rom.load("rbshura.sfc")
-    table = Table("tables/rbshura.tbl")
-    out_dir = Path("data/jp")
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--force", action="store_true",
+                    help="overwrite existing data/jp/scenario_*.txt (they may be hand-corrected)")
+    args = ap.parse_args()
+
+    if not PRISTINE_ROM.exists():
+        raise SystemExit(
+            f"Pristine source ROM not found: {PRISTINE_ROM}\n"
+            "Expected the JP source at roms/rbshura.sfc."
+        )
+
+    out_dir = DATA_JP
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not args.force:
+        existing = [
+            f"scenario_{scen:02d}.txt"
+            for scen, *_ in SCENARIOS
+            if (out_dir / f"scenario_{scen:02d}.txt").exists()
+        ]
+        if existing:
+            raise SystemExit(
+                f"Refusing to overwrite {len(existing)} existing file(s) in {out_dir} "
+                "(JP dumps may have been hand-corrected).\n"
+                "Re-run with --force to regenerate them from the pristine ROM."
+            )
+
+    rom = Rom.load(str(PRISTINE_ROM))
+    table = Table(str(TABLES / "rbshura.tbl"))
 
     total_entries = 0
     for scen, bank, ptr_addr, count in SCENARIOS:

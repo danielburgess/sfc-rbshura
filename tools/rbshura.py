@@ -18,14 +18,16 @@ from typing import Optional
 def snes_to_pc(addr: int) -> int:
     """Convert a 24-bit SNES HiROM address to a ROM file offset.
 
-    Valid for banks $40–$5F, $80–$9F, $C0–$DF (the ROM banks in this cart).
-    Raises ValueError for unmapped addresses (system area, WRAM, etc.).
+    Valid for ROM banks $40–$7D (slow mirror), $80–$BF (upper-half mirror),
+    and $C0–$FF (full banks, incl. the $E0–$FF expansion region). Raises
+    ValueError for unmapped addresses, incl. WRAM banks $7E/$7F.
     """
     bank   = (addr >> 16) & 0xFF
     offset = addr & 0xFFFF
 
-    # Normalize to the ROM bank index (0–31 for a 2 MB cart)
-    if 0x40 <= bank <= 0x7F:
+    # Normalize to the ROM bank index (0–63 for a 4 MB cart). $7E/$7F are
+    # WRAM, not ROM, so the slow-mirror range stops at $7D.
+    if 0x40 <= bank <= 0x7D:
         rom_bank = bank - 0x40
     elif 0x80 <= bank <= 0xBF:
         if offset < 0x8000:
@@ -42,11 +44,14 @@ def snes_to_pc(addr: int) -> int:
 def pc_to_snes(pc: int, fast: bool = True) -> int:
     """Convert a ROM file offset to a 24-bit SNES HiROM address.
 
-    fast=True  → banks $C0–$DF  (FastROM, used by the game's code)
-    fast=False → banks $40–$5F  (slow mirror)
+    fast=True  → banks $C0–$FF  (FastROM; $C0–$DF base ROM, $E0–$FF expansion)
+    fast=False → banks $40–$7D  (slow mirror)
+
+    Covers the full 4 MB expanded ROM (was 2 MB before 2026-05-26 — the EN
+    build relocates text/graphics into expansion banks $E0–$FF).
     """
-    if pc < 0 or pc >= 0x200000:
-        raise ValueError(f"PC offset 0x{pc:06X} is outside the 2 MB ROM")
+    if pc < 0 or pc >= 0x400000:
+        raise ValueError(f"PC offset 0x{pc:06X} is outside the 4 MB ROM")
     bank_idx = pc >> 16
     offset   = pc & 0xFFFF
     base     = 0xC0 if fast else 0x40

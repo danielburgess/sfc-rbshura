@@ -14,7 +14,7 @@ terminator = 0xFF
 # in the source ROM. With 24-bit ptrs the relocate handler routes every
 # entry into the [rom.build].freespace pool (24-bit fast path), so the
 # [data] region below is informational only — it is NOT used for packing.
-offset = "$8586E4"
+offset = "$0586E4"
 count = 59
 size = 3
 
@@ -24,8 +24,8 @@ size = 3
 # fast path every entry is allocated from freespace; the original slot
 # bytes are left untouched (overwritten by the new 3-byte ptr table
 # extending from $8586E4 + 59*3 = $858795).
-offset = "$858795"
-end = "$858795"
+offset = "$058795"
+end = "$058795"
 
 [section]
 kind = "script"

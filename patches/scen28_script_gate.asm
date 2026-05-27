@@ -139,6 +139,10 @@ StallCheck:
     SEP #$20
     RTL
 
+; Build-time guard: stub must stay within its reservation ($E0E000..$E0E080;
+; project.toml freespace resumes at $20E080).
+assert pc() <= $E0E080, "ScriptGate stub overflowed its reservation ($E0E080)"
+
 ; =========================================================================
 ; End. Stub ~$E0:E000..~$E0:E04x. project.toml reserves $20E000..$20E080
 ; (freespace line for $E0 resumes at $20E080 — keep them in sync if the stub

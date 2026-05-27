@@ -279,14 +279,22 @@ def text_to_indices_jp(text: str, table: dict) -> list[int]:
                 indices.append(val)
             i += 1
         elif c == '[':
-            # Hex literal [XX] or [FA:XX]
-            end = text.index(']', i)
+            # Hex literal [XX] or [FA:XX]. Be defensive: a stray '[' or a
+            # non-hex token must not crash the whole preview build.
+            end = text.find(']', i)
+            if end == -1:
+                indices.append(0x00)   # unmatched '[' → render as blank
+                i += 1
+                continue
             hex_content = text[i + 1:end]
-            if ':' in hex_content:
-                _, val_s = hex_content.split(':')
-                indices.append(CHARS_PER_PAGE + int(val_s, 16))
-            else:
-                indices.append(int(hex_content, 16))
+            try:
+                if ':' in hex_content:
+                    _, val_s = hex_content.split(':')
+                    indices.append(CHARS_PER_PAGE + int(val_s, 16))
+                else:
+                    indices.append(int(hex_content, 16))
+            except ValueError:
+                indices.append(0x00)   # not a hex token → render as blank
             i = end + 1
         else:
             # Unknown - try direct lookup
@@ -320,13 +328,20 @@ def text_to_indices_en(text: str, table: dict) -> list[int]:
             indices.append(0x00)  # space
             i += 1
         elif c == '[':
-            end = text.index(']', i)
+            end = text.find(']', i)
+            if end == -1:
+                indices.append(0x00)   # unmatched '[' → render as blank
+                i += 1
+                continue
             hex_content = text[i + 1:end]
-            if ':' in hex_content:
-                _, val_s = hex_content.split(':')
-                indices.append(int(val_s, 16))
-            else:
-                indices.append(int(hex_content, 16))
+            try:
+                if ':' in hex_content:
+                    _, val_s = hex_content.split(':')
+                    indices.append(int(val_s, 16))
+                else:
+                    indices.append(int(hex_content, 16))
+            except ValueError:
+                indices.append(0x00)   # not a hex token → render as blank
             i = end + 1
         else:
             indices.append(0x00)  # fallback to space
@@ -454,14 +469,10 @@ def group_into_scenes(entries: list[dict]) -> list[dict]:
 # Portrait names
 # ---------------------------------------------------------------------------
 
-PORTRAIT_NAMES = {
-    0x00: "Dick",
-    0x01: "Spider",
-    0x02: "Kythring",
-    0x03: "McCoy",
-    0x04: "Jimmy",
-    0x05: "Dag",
-}
+# Left empty until portrait IDs are visually verified. The previous mapping
+# (Dick/Spider/Kythring/McCoy/Jimmy/Dag) was confirmed WRONG by the user on
+# 2026-05-17; script_editor.py is the source of truth and keeps this empty.
+PORTRAIT_NAMES: dict[int, str] = {}
 
 
 def extract_portrait(text: str) -> str | None:

@@ -29,11 +29,13 @@ import re
 import sys
 from pathlib import Path
 
+from _paths import BUILT_ROM, DATA_EN
+
 SLOT_TBL = 0xAB22
 DF_FILE = 0x1F0000
 SLOT_LO, SLOT_HI = 0x000, 0x520          # full scen-28 cutscene incl. ending fade + epilogue (slots $300+)
 CLUSTER_LO, CLUSTER_HI = 0xB100, 0xC2FF   # widened to cover ending scripts $DFBDxx..$DFC2xx
-EN_TXT = "data/en/scenario_28.txt"
+EN_TXT = DATA_EN / "scenario_28.txt"
 
 TARGET_NOTES = {
     0x1C48: "ENTRY ADVANCE — do NOT retime (gated by scen28_script_gate)",
@@ -63,8 +65,19 @@ def load_snippets(path: str) -> dict[int, str]:
 
 
 def main() -> None:
-    rom_path = sys.argv[1] if len(sys.argv) > 1 else "rbshura_en_24bit.sfc"
-    rom = Path(rom_path).read_bytes()
+    rom_path = Path(sys.argv[1]) if len(sys.argv) > 1 else BUILT_ROM
+    if not rom_path.exists():
+        raise SystemExit(
+            f"ROM not found: {rom_path}\n"
+            "This tool reads bank $DF of the BUILT EN ROM. "
+            "Rebuild it first: python scripts/build_24bit.py"
+        )
+    rom = rom_path.read_bytes()
+    if len(rom) < DF_FILE + 0x10000:
+        raise SystemExit(
+            f"ROM too small ({len(rom)} B) — bank $DF (file ${DF_FILE:06X}) is out of range. "
+            "Expected the 4 MB built EN ROM."
+        )
     snips = load_snippets(EN_TXT)
 
     def df(a): return rom[DF_FILE + a]
@@ -81,11 +94,17 @@ def main() -> None:
                 if a == 0xFFFF:
                     p += 2; break
                 writes.append((a, df(p + 2))); p += 3; g += 1
+            else:
+                print(f"# WARNING: step @$DF:{base + start:04X} hit the 64-write "
+                      "cap with no FFFF terminator — may be truncated", file=sys.stderr)
             slot_end = df(p) == 0xFF
             steps.append((start, wait, writes, slot_end))
             if slot_end:
                 break
             off = p - base
+        else:
+            print(f"# WARNING: slot @$DF:{base:04X} hit the {max_steps}-step cap "
+                  "with no slot-end marker — may be truncated", file=sys.stderr)
         return steps
 
     # walk execution order, track entry, collect per-wait-address contexts

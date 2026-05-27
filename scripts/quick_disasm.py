@@ -193,10 +193,19 @@ def fmt_operand(mode: str, data: bytes, pc: int) -> tuple[str, int]:
     return ("???", 1)
 
 
-def disasm(rom: bytes, start_pc: int, length: int, file_offset: int) -> None:
-    """Disassemble. start_pc is SNES PC, file_offset is file byte offset into rom."""
-    m_flag = 1  # assume 8-bit A on entry (REP/SEP will update)
-    x_flag = 1
+def disasm(rom: bytes, start_pc: int, length: int, file_offset: int,
+           m_init: int = 1, x_init: int = 1) -> None:
+    """Disassemble. start_pc is SNES PC, file_offset is file byte offset into rom.
+
+    CAUTION: M/X width tracking is LINEAR — it only follows REP/SEP seen in
+    straight-line order; it does NOT model calls/returns/branches/XCE. If the
+    range spans more than one routine, the width carried out of one routine is
+    wrongly applied to the next, which can desync operand sizes (and thus the
+    whole instruction stream) after the first control-flow change. Start at a
+    known REP/SEP boundary, or seed the entry width with m_init/x_init.
+    """
+    m_flag = m_init  # 8-bit A on entry unless seeded otherwise (REP/SEP update)
+    x_flag = x_init
     p = 0
     while p < length:
         opcode = rom[file_offset + p]
@@ -257,12 +266,26 @@ def disasm(rom: bytes, start_pc: int, length: int, file_offset: int) -> None:
 
 
 if __name__ == "__main__":
-    rom_path = sys.argv[1]
-    start_pc = int(sys.argv[2], 16)
-    length = int(sys.argv[3], 16)
-    # HiROM: PC same as file offset for bank $00-$7D upper half / $C0-$FF
-    # For PC range $058000..$05FFFF this is bank $85 (or $C5) data.
-    # File offset for our disassembly target = start_pc directly (since rbshura is HiROM and bank $85 = file offset $050000+)
-    file_offset = start_pc  # PC-as-file-offset assumption (correct for our $05xxxx range in HiROM)
-    rom = open(rom_path, 'rb').read()
-    disasm(rom, start_pc, length, file_offset)
+    import argparse
+    from pathlib import Path
+
+    ap = argparse.ArgumentParser(
+        description="Minimal 65816 disassembler (LINEAR M/X tracking — see disasm() docstring).")
+    ap.add_argument("rom")
+    ap.add_argument("start_pc", help="start address, hex (e.g. 058000)")
+    ap.add_argument("length", help="byte count, hex")
+    ap.add_argument("--m", type=int, choices=(0, 1), default=1,
+                    help="initial accumulator width on entry: 1=8-bit (default), 0=16-bit")
+    ap.add_argument("--x", type=int, choices=(0, 1), default=1,
+                    help="initial index width on entry: 1=8-bit (default), 0=16-bit")
+    ap.add_argument("--file-offset", default=None,
+                    help="file byte offset (hex) if it differs from start_pc. Defaults to "
+                         "start_pc — valid for rbshura's HiROM $05xxxx range (bank $85/$C5 "
+                         "= file $050000+), but NOT for arbitrary banks.")
+    args = ap.parse_args()
+
+    start_pc = int(args.start_pc, 16)
+    length = int(args.length, 16)
+    file_offset = int(args.file_offset, 16) if args.file_offset else start_pc
+    rom = Path(args.rom).read_bytes()
+    disasm(rom, start_pc, length, file_offset, m_init=args.m, x_init=args.x)
