@@ -7,6 +7,7 @@ dependencies = [
     "retrotool",
     "retrotool-libsfx",
     "retrotool-asar",
+    "retrotool-xdelta",
     "pillow>=12.2.0",
 ]
 
@@ -18,3 +19,4 @@ dependencies = [
 retrotool = { path = "/mnt/crucial/projects/retrotool", editable = true }
 retrotool-libsfx = { path = "/mnt/crucial/projects/retrotool/packages/retrotool-libsfx", editable = true }
 retrotool-asar = { path = "/mnt/crucial/projects/retrotool/packages/retrotool-asar", editable = true }
+retrotool-xdelta = { path = "/mnt/crucial/projects/retrotool/packages/retrotool-xdelta", editable = true }

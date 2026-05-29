@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 ROMS = ROOT / "roms"
 OUT = ROOT / "out"
+DIST = ROOT / "dist"          # tracked, distributable release artifacts (patches + patcher)
 DATA = ROOT / "data"
 DATA_JP = DATA / "jp"
 DATA_EN = DATA / "en"

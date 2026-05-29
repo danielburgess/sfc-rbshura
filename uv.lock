@@ -138,6 +138,11 @@ version = "2026.5.15"
 source = { editable = "../../../crucial/projects/retrotool/packages/retrotool-libsfx" }
 
 [[package]]
+name = "retrotool-xdelta"
+version = "3.1.1"
+source = { editable = "../../../crucial/projects/retrotool/packages/retrotool-xdelta" }
+
+[[package]]
 name = "sfc-rbshura"
 version = "0.1.0"
 source = { virtual = "." }
@@ -147,6 +152,7 @@ dependencies = [
     { name = "retrotool" },
     { name = "retrotool-asar" },
     { name = "retrotool-libsfx" },
+    { name = "retrotool-xdelta" },
 ]
 
 [package.metadata]
@@ -156,4 +162,5 @@ requires-dist = [
     { name = "retrotool", editable = "../../../crucial/projects/retrotool" },
     { name = "retrotool-asar", editable = "../../../crucial/projects/retrotool/packages/retrotool-asar" },
     { name = "retrotool-libsfx", editable = "../../../crucial/projects/retrotool/packages/retrotool-libsfx" },
+    { name = "retrotool-xdelta", editable = "../../../crucial/projects/retrotool/packages/retrotool-xdelta" },
 ]

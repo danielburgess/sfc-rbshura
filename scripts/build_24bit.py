@@ -17,11 +17,21 @@ ROOT = Path(__file__).parent.parent
 
 
 def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description="Build the EN rbshura ROM via retrotool.")
+    ap.add_argument("--patches", action="store_true",
+                    help="also emit IPS + xdelta patches (original roms/rbshura.sfc → "
+                         "out/rbshura_en.sfc) next to the built ROM")
+    args = ap.parse_args()
+
     from retrotool.build import build_project
     # No explicit output= : the path is derived from [rom].name +
     # [rom.build].output_dir in project.toml (→ out/rbshura_en.sfc).
     # build_project() prints its own summary (resolved path + checksum).
-    result = build_project(path=str(ROOT), no_cache=True)
+    result = build_project(
+        path=str(ROOT), no_cache=True,
+        diff="ips+xdelta" if args.patches else None,
+    )
     print(f"  → {result.rom_size:,} B · {len(result.sections)} sections "
           f"· ${result.checksum:04X}")
 
