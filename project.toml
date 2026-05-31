@@ -67,7 +67,16 @@ freespace = [
     # $E1:0000..$E1:0FFF (file $210000..$211000) reserved for the relocated
     # attack-name graphics pool (assets/attack_names_e1.bin, ~3.3 KB). See
     # patches/attack_names_reloc.asm + tools/encode_attack_names.py.
-    ["$211000", "$400000"],   # $E1:1000..$FF:FFFF   (post-attack-names)
+    # $E1:1000..$E1:A0FF reserved for relocated EN title art (gated $00C8==2):
+    #   $E1:1000 title_logo.bin    (16 KiB BG1 logo char, 512 tiles)
+    #   $E1:5000 title_kanji.bin   (8 KiB OBJ kanji tiles)
+    #   $E1:7000 title_tilemap.bin (12 KiB BG1+BG2+BG3 map blob)
+    #   $E1:A000 gated source stubs (patches/title_logo_reloc.asm)
+    #   $E1:A200 title_kanji_meta.bin (EN SHURA metasprite table)
+    #   $E1:A300 Phase0Skip stub (patches/intro_skip.asm — START skips splashes; SHELVED/disabled)
+    #   $E1:A340 DrawCredit + EN credit string (patches/intro_credit.asm — G2 splash credit)
+    # See TITLE_INTRO_PLAN.md Phase 1/2/3.
+    ["$21A3C0", "$400000"],   # $E1:A3C0..$FF:FFFF   (post-title-art + intro-skip + credit)
 ]
 
 # ---- Inline sections: font + engine patches ----
@@ -246,6 +255,59 @@ palette-anchors = "4:E7E700,5:FF5A08"
 [[rom.build.sections]]
 kind = "asar"
 file = "patches/attack_names_reloc.asm"
+
+# Title BG1 logo (RUSHING BEAT + 修羅) relocated to $E1:1000, gated to the main
+# title only ($00C8==2). The shared screen-push routine's char DMA ($DF:DE73,
+# $7F:4000 -> VRAM $2000) is repointed to $E1:1000 via a $00C8-gated stub so the
+# splash ($00C8=0) and narration ($00C8=6) screens are unaffected. 8 KiB of
+# final 4bpp tiles (256 tiles). To redraw: export/title_bg1_logo.png ->
+# superfamiconv 4bpp -> assets/title_logo.bin (keep tile grid / tilemap).
+# EN title BG1 logo — custom graphics encoder, runs DURING the build.
+# tools/encode_title_logo.py quantizes export/title_bg1_logo_en.png to the
+# original CGRAM pal 4/5/6 and emits: a 16 KiB char (512 tiles; expanded 8K->16K
+# for the EN art's ~346 tiles) at $E1:1000, and the BG1 tilemap spliced into the
+# 12 KiB BG1+BG2+BG3 combined blob at $E1:7000. Relocated + gated to the title
+# ($00C8==2) by patches/title_logo_reloc.asm. Edit the PNG → rebuild (no extra
+# steps). assets/title_cgram.bin + assets/title_tilemap_orig.bin are the encoder
+# inputs (committed).
+[[rom.build.sections]]
+kind = "graphics"
+encoder = "tools/encode_title_logo.py:build"
+file = "export/title_bg1_logo_en.png"
+offset = "$211000"          # char  -> $E1:1000 (16 KiB)
+map-offset = "$217000"      # tilemap blob -> $E1:7000 (12 KiB)
+
+# EN 修羅→"SHURA" kanji = OBJ sprites — custom graphics encoder.
+# tools/encode_title_kanji_meta.py tiles export/title_kanji_en_expanded.png
+# (140x72) into 16x16 sprites and emits 8 KiB OBJ tiles at $E1:5000 + a NEW
+# metasprite table at $E1:A200. The metasprite pointer in SetupSpriteAndUI is
+# repointed there (gated $00C8==2) so other screens keep the original 修羅.
+# Nudge placement via center-x/center-y (default in the encoder). Edit PNG → rebuild.
+[[rom.build.sections]]
+kind = "graphics"
+encoder = "tools/encode_title_kanji_meta.py:build"
+file = "export/title_kanji_en_expanded.png"
+offset = "$215000"          # OBJ tiles -> $E1:5000 (8 KiB)
+meta-offset = "$21A200"     # metasprite table -> $E1:A200
+# center-x = "183"          # uncomment to override the SHURA on-screen center
+# center-y = "119"
+
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/title_logo_reloc.asm"
+
+# G3: press START on the RUSHING BEAT / JALECO splash screens -> skip to title.
+# SHELVED 2026-05-30 — approach (hook WaitForVBlankStart $80DC32 to skip dwells)
+# did nothing in-game; deferred for deeper investigation. patches/intro_skip.asm
+# kept for reference. Re-enable by uncommenting the section below.
+# [[rom.build.sections]]
+# kind = "asar"
+# file = "patches/intro_skip.asm"
+
+# G2: add EN translation credit line to the RUSHING BEAT copyright splash.
+[[rom.build.sections]]
+kind = "asar"
+file = "patches/intro_credit.asm"
 
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads

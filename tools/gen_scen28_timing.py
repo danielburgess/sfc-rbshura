@@ -70,7 +70,7 @@ def main() -> None:
         raise SystemExit(
             f"ROM not found: {rom_path}\n"
             "This tool reads bank $DF of the BUILT EN ROM. "
-            "Rebuild it first: python scripts/build_24bit.py"
+            "Rebuild it first: ./.venv/bin/retrotool build project.toml -j 1 --no-cache"
         )
     rom = rom_path.read_bytes()
     if len(rom) < DF_FILE + 0x10000:

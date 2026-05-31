@@ -44,7 +44,7 @@ def load(rom_path: str) -> bytes:
         raise SystemExit(
             f"ROM not found: {p}\n"
             "This tool reads the BUILT EN ROM's cutscene script. "
-            "Rebuild it first: python scripts/build_24bit.py"
+            "Rebuild it first: ./.venv/bin/retrotool build project.toml -j 1 --no-cache"
         )
     return p.read_bytes()
 

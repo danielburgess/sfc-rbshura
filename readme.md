@@ -96,10 +96,16 @@ source ROM is **not** included (copyright); place it at `roms/rbshura.sfc`.
 
 ```sh
 uv sync
-python scripts/build_24bit.py            # → out/rbshura_en.sfc
-python scripts/build_24bit.py --patches  # also writes out/*.ips and out/*.xdelta
-python tools/make_patcher.py             # regenerate dist/apply_patch.py + dist/ patches
+./.venv/bin/retrotool build project.toml -j 1 --no-cache              # → out/rbshura_en.sfc
+./.venv/bin/retrotool build project.toml -j 1 --no-cache --diff both  # also writes out/*.ips + out/*.xdelta
+python tools/make_patcher.py                                          # regenerate dist/apply_patch.py + dist/ patches
 ```
+
+Everything — font, engine patches, char_names, 14 scenarios, **and the EN title
+graphics** — is declared in `project.toml` and built in one `retrotool build`.
+The title logo + kanji are custom `kind="graphics"` encoders
+(`tools/encode_title_logo.py`, `tools/encode_title_kanji_meta.py`) that run
+during the build: edit the source PNG and rebuild — no pre-steps.
 
 `project.toml` is the build manifest (font, engine patches, scenario tables). See
 `PROJECT_INDEX.md` for a map of the repo.

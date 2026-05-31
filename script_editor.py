@@ -164,7 +164,7 @@ def _pick_rom() -> Path:
             return c
     raise FileNotFoundError(
         f"none of {[str(c.name) for c in ROM_CANDIDATES]} found — "
-        f"run scripts/build_24bit.py first."
+        f"run retrotool build project.toml first."
     )
 
 

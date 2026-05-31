@@ -2,7 +2,7 @@
 
 After the 2026-05-26 reorganization the tree is split into:
   * ``roms/``  — pristine source ROMs (build inputs, never written by tools)
-  * ``out/``   — build artifacts (written by scripts/build_24bit.py)
+  * ``out/``   — build artifacts (written by retrotool build project.toml)
 
 Tools historically hardcoded ``Path(__file__).parent`` (which breaks the moment
 a script moves between the repo root and ``tools/``) or bare cwd-relative paths
