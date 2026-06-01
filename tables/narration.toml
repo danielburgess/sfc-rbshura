@@ -33,11 +33,23 @@ count = 19
 size = 2
 
 [data]
-# The screens' own region: $1F:C5D9 (first original entry) up to (not into)
-# intro part1 at $1F:C8F1. 792 B; EN content ~579 B. Relocate packs here and
-# rewrites the idx 1-19 pointers. Does NOT touch $1F:C8F1 or the $E0 intro.
+# The screens' own region in bank $1F. retrotool packs 16-bit-pointer text into
+# the POINTER TABLE's bank ($1F) and pins each entry to its source PC — it can
+# NOT relocate this data to another bank by changing the offset (that pins to
+# ptr_tbl_bank in handlers.py). So the screens stay in bank $1F.
+#
+# EXTENDED 2026-05-31 from $1F:C8F1 to $1F:CD35 (+1092 B). The original 792 B
+# region ($1F:C5D9..$1F:C8F1) overflowed — entry 15 (the final JIMMY epilogue,
+# ~122 B) could not fit and shipped UNTRANSLATED. The intro relocation to bank
+# $E0 (tables/intro.toml + patches/intro_double_render.asm/intro_dest_bank.asm)
+# made the original intro part1 bytes at $1F:C8F1..$1F:CD35 DEAD — the engine
+# now reads part1 from $E0:C8F1 (idx-0 pointer read with DBR=$E0), so $1F:C8F1
+# is no longer referenced at runtime. Reclaiming it gives the narration ~1 KB of
+# headroom with NO renderer change (DBR stays $DF) and NO new bank. $1F:CD35
+# (old intro part2, still possibly live for non-text screen blocks) is the hard
+# stop — do not extend past it.
 offset = "$1FC5D9"
-end = "$1FC8F1"
+end = "$1FCD35"
 
 [section]
 kind = "script"
