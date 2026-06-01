@@ -54,9 +54,9 @@ EN_DATA_DIR = DEFAULT_EN_DATA_DIR
 # build to land. Palettes still come from the ROM (extracted from $058313).
 FONT_BIN_PATH = ROOT / "fonts" / "rbshura_en.bin"
 ROM_CANDIDATES = [
-    ROOT / "rbshura_en_24bit.sfc",
-    ROOT / "rbshura_pkfont_24bit.sfc",
-    ROOT / "rbshura_pkfont.sfc",
+    ROOT / "out/rbshura_en.sfc",
+    ROOT / "out/rbshura_pkfont_24bit.sfc",
+    ROOT / "out/rbshura_pkfont.sfc",
 ]
 FONT_PC = 0x100000           # absolute ROM offset (kept for reference / extract logic)
 FONT_SLOT_STRIDE = 64        # rbshura's per-glyph slot
