@@ -1,0 +1,64 @@
+name: Release
+
+# Builds the Windows patcher .exe and publishes the release assets.
+#
+# IMPORTANT: this workflow does NOT build the ROM or the patches — the Japanese
+# source ROM is copyright-gitignored and never reaches CI. The patches
+# (dist/rbshura_en.ips / .xdelta) and the patcher (dist/apply_patch.py) are
+# generated locally with the full retrotool toolchain and committed to dist/:
+#   ./.venv/bin/retrotool build project.toml -j 1 --no-cache --diff both
+#   python tools/make_patcher.py
+#   git add dist/ && git commit && git tag v1.0 && git push --tags
+#
+# CI only PyInstaller-packages the already-built, self-contained
+# dist/apply_patch.py (which embeds the IPS as gzip+base64 — diff data only,
+# no copyrighted ROM bytes) into apply_patch.exe, then attaches every release
+# asset to the GitHub Release for the pushed tag.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:        # manual run → builds + uploads the exe as an artifact (no release)
+
+permissions:
+  contents: write           # needed to create/attach the GitHub Release
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build apply_patch.exe
+        # --windowed: no console (the patcher uses dialogs/messageboxes when frozen).
+        # --onefile: single distributable exe. Output to build/exe so it does NOT
+        # collide with the repo's tracked dist/ (PyInstaller defaults to ./dist).
+        run: >
+          pyinstaller --onefile --windowed --name apply_patch
+          --distpath build/exe --workpath build/work --specpath build
+          dist/apply_patch.py
+
+      - name: Upload exe as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apply_patch-windows
+          path: build/exe/apply_patch.exe
+
+      - name: Attach assets to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/exe/apply_patch.exe
+            dist/apply_patch.py
+            dist/rbshura_en.ips
+            dist/rbshura_en.xdelta
+          fail_on_unmatched_files: true
+          generate_release_notes: true
