@@ -37,7 +37,20 @@ localization.
 
 ## Status
 
-**1.0 release.** The translation is complete and the build is verified.
+**1.1 release.** The translation is complete and the build is verified.
+
+### Changelog
+
+**1.1**
+- Fixed a background-graphics corruption on the Metal Frame Factory stage. The
+  fix that converts the per-character ending/intro narration screens to the
+  English font was hooking a *shared* screen-rendering routine, so it also ran
+  during normal gameplay and garbled the stage backdrop. It is now gated to run
+  only for the narration screens.
+- Minor script/dialogue corrections.
+
+**1.0**
+- Initial complete English release.
 
 ---
 
