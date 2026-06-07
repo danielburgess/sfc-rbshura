@@ -1,6 +1,13 @@
 name: Release
 
-# Builds the Windows patcher .exe and publishes the release assets.
+# Builds the Windows patcher .exe and publishes FOUR separate GitHub Releases,
+# one per distribution edition (each release carries a single .zip that bundles
+# its files + the readme):
+#
+#   v1.0-windows     RushingBeatShura_1.0_en_windows.zip   apply_patch.exe + readme
+#   v1.0-linux       RushingBeatShura_1.0_en_linux.zip     apply_patch.py + apply_patch.sh + readme
+#   v1.0-macos       RushingBeatShura_1.0_en_macos.zip     apply_patch.py + apply_patch.command + readme
+#   v1.0-patch-only  RushingBeatShura_1.0_en_patch.zip     rbshura_en.ips + .xdelta + readme
 #
 # IMPORTANT: this workflow does NOT build the ROM or the patches — the Japanese
 # source ROM is copyright-gitignored and never reaches CI. The patches
@@ -8,24 +15,30 @@ name: Release
 # generated locally with the full retrotool toolchain and committed to dist/:
 #   ./.venv/bin/retrotool build project.toml -j 1 --no-cache --diff both
 #   python tools/make_patcher.py
-#   git add dist/ && git commit && git tag v1.0 && git push --tags
+#   git add dist/ && git commit && git tag v1.0 && git push origin main v1.0
 #
 # CI only PyInstaller-packages the already-built, self-contained
 # dist/apply_patch.py (which embeds the IPS as gzip+base64 — diff data only,
-# no copyrighted ROM bytes) into apply_patch.exe, then attaches every release
-# asset to the GitHub Release for the pushed tag.
+# no copyrighted ROM bytes) into apply_patch.exe, zips the editions, and creates
+# the releases for the pushed tag's commit. The Linux/macOS launcher scripts
+# (dist/apply_patch.sh / dist/apply_patch.command) are committed in the repo.
 
 on:
   push:
-    tags: ["v*"]
-  workflow_dispatch:        # manual run → builds + uploads the exe as an artifact (no release)
+    tags:
+      - "v*"
+      - "!v*-*"   # don't re-trigger on the per-edition sub-tags (v1.0-windows, ...)
+  workflow_dispatch:        # manual run → still builds the exe + uploads it as an artifact
 
 permissions:
-  contents: write           # needed to create/attach the GitHub Release
+  contents: write           # needed to create the GitHub Releases + tags
 
 jobs:
   build-exe:
     runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VER: "1.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -51,25 +64,60 @@ jobs:
           name: apply_patch-windows
           path: build/exe/apply_patch.exe
 
-      - name: Assemble release zip
-        # Bundle the user-facing files into ONE archive so the release asset list
-        # shows a single download (plus GitHub's auto source archives) rather than
-        # five loose files. Contents at the zip root: the Windows patcher, the
-        # cross-platform Python patcher, both raw patches, and the readme.
+      - name: Assemble the edition zips
+        # Each edition is a self-contained download: the exe and the .py both embed
+        # the IPS, so they need no separate patch file. Linux/macOS get a launcher
+        # script alongside the .py; patch-only is for users who bring their own
+        # IPS/xdelta tool. Every zip includes the readme.
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path stage | Out-Null
-          Copy-Item build/exe/apply_patch.exe stage/
-          Copy-Item dist/apply_patch.py       stage/
-          Copy-Item dist/rbshura_en.ips       stage/
-          Copy-Item dist/rbshura_en.xdelta    stage/
-          Copy-Item readme.md                 stage/
-          Compress-Archive -Path stage/* -DestinationPath RushingBeatShura_1.0_en_patch.zip -Force
+          $win   = "RushingBeatShura_${env:VER}_en_windows.zip"
+          $linux = "RushingBeatShura_${env:VER}_en_linux.zip"
+          $mac   = "RushingBeatShura_${env:VER}_en_macos.zip"
+          $patch = "RushingBeatShura_${env:VER}_en_patch.zip"
 
-      - name: Attach assets to the GitHub Release
+          New-Item -ItemType Directory -Force -Path stage/win, stage/linux, stage/mac, stage/patch | Out-Null
+
+          Copy-Item build/exe/apply_patch.exe stage/win/
+          Copy-Item readme.md                 stage/win/
+
+          Copy-Item dist/apply_patch.py       stage/linux/
+          Copy-Item dist/apply_patch.sh       stage/linux/
+          Copy-Item readme.md                 stage/linux/
+
+          Copy-Item dist/apply_patch.py       stage/mac/
+          Copy-Item dist/apply_patch.command  stage/mac/
+          Copy-Item readme.md                 stage/mac/
+
+          Copy-Item dist/rbshura_en.ips       stage/patch/
+          Copy-Item dist/rbshura_en.xdelta    stage/patch/
+          Copy-Item readme.md                 stage/patch/
+
+          Compress-Archive -Path stage/win/*   -DestinationPath $win   -Force
+          Compress-Archive -Path stage/linux/* -DestinationPath $linux -Force
+          Compress-Archive -Path stage/mac/*   -DestinationPath $mac   -Force
+          Compress-Archive -Path stage/patch/* -DestinationPath $patch -Force
+
+      - name: Publish the GitHub Releases
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: RushingBeatShura_1.0_en_patch.zip
-          fail_on_unmatched_files: true
-          generate_release_notes: true
+        shell: pwsh
+        # One release per edition, each tagged at this commit. Delete-then-create
+        # keeps re-runs idempotent (gh release create errors if the release exists).
+        # Deletes of a not-yet-existing release are expected to fail and ignored.
+        run: |
+          $sha = "${{ github.sha }}"
+          $win   = "RushingBeatShura_${env:VER}_en_windows.zip"
+          $linux = "RushingBeatShura_${env:VER}_en_linux.zip"
+          $mac   = "RushingBeatShura_${env:VER}_en_macos.zip"
+          $patch = "RushingBeatShura_${env:VER}_en_patch.zip"
+
+          function Publish($tag, $title, $zip) {
+            gh release delete $tag --yes --cleanup-tag 2>$null
+            gh release create $tag $zip --target $sha --title $title --generate-notes
+            if ($LASTEXITCODE -ne 0) { throw "gh release create failed for $tag" }
+          }
+
+          Publish "v${env:VER}-windows"    "Rushing Beat Shura ${env:VER} — Windows patcher"         $win
+          Publish "v${env:VER}-linux"      "Rushing Beat Shura ${env:VER} — Linux patcher"           $linux
+          Publish "v${env:VER}-macos"      "Rushing Beat Shura ${env:VER} — macOS patcher"           $mac
+          Publish "v${env:VER}-patch-only" "Rushing Beat Shura ${env:VER} — patch only (IPS/xdelta)" $patch
