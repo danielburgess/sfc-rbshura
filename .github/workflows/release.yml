@@ -60,5 +60,6 @@ jobs:
             dist/apply_patch.py
             dist/rbshura_en.ips
             dist/rbshura_en.xdelta
+            readme.md
           fail_on_unmatched_files: true
           generate_release_notes: true
