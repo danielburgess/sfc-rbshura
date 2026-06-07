@@ -37,8 +37,7 @@ localization.
 
 ## Status
 
-**Release candidate.** The translation is complete and the build is verified; final
-polish/playtesting is ongoing.
+**1.0 release.** The translation is complete and the build is verified.
 
 ---
 
