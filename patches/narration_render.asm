@@ -35,14 +35,19 @@ hirom
 !FONT_BANK = $00D0          ; PK font source bank (file $100000 = $D0:0000)
 
 ; =========================================================================
-; Entry hook: replace fadeScreenIn ($05:F18C, the $00C9!=4 dispatch target)
-; with `JSL renderer / JMP processPlayerMovement`. The original 165-byte
-; glyph-DMA routine ($F18C-$F230) becomes dead code (no external refs;
-; processPlayerMovement at $F231 is preserved and reached here). 7 bytes.
+; Entry hook: replace the fadeScreenIn entry ($05:F18C, the $00C9!=4 render
+; dispatch target) with a JML to NarrationGate. fadeScreenIn is the GENERIC
+; screen renderer (reads $1F:C57F[$1E94] and DMAs the screen) — used by the
+; intro-narration screens AND by gameplay/other screens. The original hook
+; replaced it WHOLESALE (`JSL renderer / JMP processPlayerMovement`), so the
+; half-width PK renderer hijacked EVERY screen, corrupting the in-game BG
+; (the stage-1 wall). NarrationGate restores the original fadeScreenIn for
+; non-narration screens and only runs our renderer for narration (idx 1-19).
+; 7 bytes (JML + 3 NOP pad), same footprint as the old hook.
 ; =========================================================================
 org $C5F18C
-    JSL NarrationHalfWidth
-    JMP $F231                   ; processPlayerMovement (shared continuation)
+    JML NarrationGate
+    NOP : NOP : NOP             ; pad to the original 7-byte footprint
 
 ; =========================================================================
 ; Relocated half-width text renderer (bank $E0 carved hole; see project.toml
@@ -173,5 +178,41 @@ NarrationHalfWidth:
     RTL                         ; DBR restored to ambient; PBR preserved by JSL
 
 ; Build-time guard: stub must stay within its 256 B reservation
-; ($20DC91..$20DD91; project.toml freespace resumes at $20DD91 = $E0:DD91).
+; ($20DC91..$20DD91; project.toml freespace resumes at $20DDD0 = $E0:DDD0).
 assert pc() <= $E0DD91, "NarrationHalfWidth overflowed its 256B reservation ($E0DD91)"
+
+; =========================================================================
+; NarrationGate — gate the half-width renderer to the NARRATION SCREENS only.
+; fadeScreenIn ($05:F18C) is the generic screen renderer for the $00C9!=4
+; render path, reached by gameplay too; the un-gated hook hijacked it and
+; corrupted the in-game BG. The narration screens are $1F:C57F idx 1-19; the
+; renderer indexes that table with $1E94, so idx 1-19 => $1E94 $02..$26.
+;   - narration ($1E94 in $02..$26): run NarrationHalfWidth, continue to
+;     processPlayerMovement ($F231) exactly as the old hook did.
+;   - everything else (intro part1 idx 0, intro part2/screens idx 20-44,
+;     gameplay): fall through to the ORIGINAL fadeScreenIn body at $F194.
+; Entry (via the JML hook): PBR=$E0, DBR=$85 (set by processGameMode's
+; PHK/PLB, so $1E94 reads WRAM), M=8, X=16. We REP #$20 for the 16-bit index
+; compare, then JML the continuation back to PBR=$85 (the engine bank) so any
+; later PHK/PLB keeps DBR on the $85 WRAM-mirror, NOT $C5 (pure ROM). There is
+; no PHK between fadeScreenIn entry and processPlayerMovement, so the bank flip
+; is otherwise transparent (same ROM data via the mirror).
+; =========================================================================
+org $E0DD91
+NarrationGate:
+    REP #$20
+    LDA $1E94                   ; screen index (DBR=$85 -> WRAM $1E94)
+    CMP #$0002
+    BCC .original               ; idx 0 (intro part1) / low -> not narration
+    CMP #$0028
+    BCS .original               ; idx 20+ (intro part2 / gameplay) -> not narration
+    ; --- narration screen (idx 1-19): half-width render-at-once ---
+    JSL NarrationHalfWidth
+    JML $85F231                  ; processPlayerMovement (old hook continuation)
+.original:
+    ; --- replicate fadeScreenIn's entry (REP #$20 already done) then continue ---
+    LDA #$40C4
+    STA $0320
+    JML $85F194                  ; original fadeScreenIn body (LDX $1E94 ...)
+
+assert pc() <= $E0DDD0, "NarrationGate overflowed its reservation ($E0DDD0)"

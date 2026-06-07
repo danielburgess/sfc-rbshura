@@ -3,7 +3,7 @@
 **A complete English fan-translation of ラッシング・ビート修羅 (*Rushing Beat Shura*) for the Super Famicom.**
 
 > You must supply your own legally-obtained Japanese ROM. This project distributes
-> only a **patch** (the differences between the Japanese and English ROMs) — never
+> only a **patch** (the differences between the Japanese and English ROMs) — not
 > the game itself.
 
 ---
@@ -95,16 +95,33 @@ source ROM is **not** included (copyright); place it at `roms/rbshura.sfc`.
 
 ```sh
 uv sync
-./.venv/bin/retrotool build project.toml -j 1 --no-cache              # → out/rbshura_en.sfc
-./.venv/bin/retrotool build project.toml -j 1 --no-cache --diff both  # also writes out/*.ips + out/*.xdelta
-python tools/make_patcher.py                                          # regenerate dist/apply_patch.py + dist/ patches
+scripts/build.sh                 # canonical build: ROM + ips/xdelta, then the write-audit gate
+scripts/build.sh --patcher       # also regenerate dist/apply_patch.py + dist/ patches
+```
+
+`scripts/build.sh` is the canonical build step. It runs the retrotool build and
+then **`tools/audit_writes.py`**, a write-provenance gate that fails the build if
+any byte changed vs the pristine ROM is not attributable to an intentional
+insertion — collisions, stray writes, a "freespace" pool that isn't actually
+free, or a section's footprint growing into adjacent game data. The approved
+footprint lives in `tools/build_write_manifest.json`; after an intentional
+change to what gets written, re-bless it with `scripts/build.sh --update-audit`.
+
+Under the hood it is just:
+
+```sh
+./.venv/bin/retrotool build project.toml -j 1 --no-cache --diff both  # → out/rbshura_en.sfc (+ .ips/.xdelta)
+./.venv/bin/python tools/audit_writes.py                              # provenance gate
+./.venv/bin/python tools/make_patcher.py                              # (--patcher) regenerate dist/
 ```
 
 Everything — font, engine patches, char_names, 14 scenarios, **and the EN title
 graphics** — is declared in `project.toml` and built in one `retrotool build`.
 The title logo + kanji are custom `kind="graphics"` encoders
 (`tools/encode_title_logo.py`, `tools/encode_title_kanji_meta.py`) that run
-during the build: edit the source PNG and rebuild — no pre-steps.
+during the build: edit the source PNG and rebuild — no pre-steps. The asar
+engine patches carry `cache = "1"` so the build reports each patch's precise
+write footprint (used by the audit).
 
 `project.toml` is the build manifest (font, engine patches, scenario tables). See
 `PROJECT_INDEX.md` for a map of the repo.
@@ -122,4 +139,4 @@ the GitHub Release. (CI never builds the ROM — the source ROM is gitignored.)
 
 This is an unofficial, non-commercial fan translation. *Rushing Beat Shura* and all
 related characters are property of their respective rights holders. No copyrighted ROM
-data is distributed here — only a patch of differences that you apply to a ROM you own.
+data is distributed here — only disassembled source code, and a patch of differences that you apply to a ROM you own.

@@ -1,0 +1,172 @@
+{
+  "live_overwrite_envelopes": {
+    "24bit_ptrs.asm": [
+      [
+        360865,
+        361196
+      ]
+    ],
+    "attack_names_reloc.asm": [
+      [
+        187462,
+        187552
+      ]
+    ],
+    "datadef:char_names": [
+      [
+        57691,
+        58075
+      ]
+    ],
+    "datadef:intro": [
+      [
+        2082215,
+        2082265
+      ]
+    ],
+    "datadef:narration_screens": [
+      [
+        2082265,
+        2083072
+      ]
+    ],
+    "datadef:scenario_00": [
+      [
+        362212,
+        362389
+      ]
+    ],
+    "datadef:scenario_02": [
+      [
+        364496,
+        364622
+      ]
+    ],
+    "datadef:scenario_04": [
+      [
+        366005,
+        366194
+      ]
+    ],
+    "datadef:scenario_06": [
+      [
+        368797,
+        368935
+      ]
+    ],
+    "datadef:scenario_08": [
+      [
+        370444,
+        370543
+      ]
+    ],
+    "datadef:scenario_10": [
+      [
+        493468,
+        493564
+      ]
+    ],
+    "datadef:scenario_12": [
+      [
+        494682,
+        494769
+      ]
+    ],
+    "datadef:scenario_14": [
+      [
+        495714,
+        495852
+      ]
+    ],
+    "datadef:scenario_16": [
+      [
+        372316,
+        372535
+      ]
+    ],
+    "datadef:scenario_18": [
+      [
+        375023,
+        375158
+      ]
+    ],
+    "datadef:scenario_20": [
+      [
+        376737,
+        376866
+      ]
+    ],
+    "datadef:scenario_22": [
+      [
+        378807,
+        378957
+      ]
+    ],
+    "datadef:scenario_24": [
+      [
+        381043,
+        381346
+      ]
+    ],
+    "datadef:scenario_26": [
+      [
+        385392,
+        385605
+      ]
+    ],
+    "intro_credit.asm": [
+      [
+        2090375,
+        2090420
+      ]
+    ],
+    "intro_dest_bank.asm": [
+      [
+        389925,
+        389926
+      ]
+    ],
+    "intro_double_render.asm": [
+      [
+        389117,
+        389126
+      ]
+    ],
+    "narration_render.asm": [
+      [
+        389516,
+        389523
+      ]
+    ],
+    "rbshura_en.bin": [
+      [
+        1048576,
+        1053696
+      ]
+    ],
+    "scen28_script_gate.asm": [
+      [
+        388741,
+        388746
+      ]
+    ],
+    "scen28_timing.asm": [
+      [
+        2077855,
+        2079996
+      ]
+    ],
+    "tight_renderer.asm": [
+      [
+        361432,
+        361513
+      ]
+    ],
+    "title_logo_reloc.asm": [
+      [
+        2086701,
+        2088615
+      ]
+    ]
+  }
+}

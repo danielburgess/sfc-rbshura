@@ -58,7 +58,9 @@ freespace = [
     #     + strings from $E0:F000 instead of WRAM $7E:C700
     # Allocator skips both reserved holes.
     ["$200000", "$20C8F1"],   # $E0:0000..$E0:C8F0
-    ["$20DD91", "$20E000"],   # $E0:DD91..$E0:DFFF   (post-narration-renderer, pre-ScriptGate)
+    # $E0:DD91..$E0:DDD0 reserved for NarrationGate (patches/narration_render.asm) —
+    # the screen-state gate scoping the half-width renderer to narration screens only.
+    ["$20DDD0", "$20E000"],   # $E0:DDD0..$E0:DFFF   (post-NarrationGate, pre-ScriptGate)
     ["$20E080", "$20F000"],   # $E0:E080..$E0:EFFF   (post-ScriptGate, pre-scen14). ScriptGate
                               # stub (scen28_script_gate.asm, org $E0E000) now gates $00D5
                               # too and runs to ~$E04x; reserve $E000..$E080 for it. Was
@@ -96,12 +98,14 @@ offset = "$100000"
 # 2. Tight-8 renderer patch — single-tile-column per char, 32 chars/line.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/tight_renderer.asm"
 
 # 3. 24-bit pointer engine — widens L4 deref to 24-bit + flips B1→B7 char
 # reads + JSL stub at $C87000 + ROM-size byte $00:FFD7 = $0F.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/24bit_ptrs.asm"
 
 # 3b. Scen 14 (ending cutscene) L1-advance handshake gate. Hooks the bank-$85
@@ -111,6 +115,7 @@ file = "patches/24bit_ptrs.asm"
 # memory/project_wram_resident_scenarios.md 2026-05-23 for evidence.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/scen28_script_gate.asm"
 
 # 3c. Scen 14 animation/fade timing tweaks — per-step wait-byte edits in the
@@ -118,6 +123,7 @@ file = "patches/scen28_script_gate.asm"
 # with tools/dump_scen28_script.py. No-op until tweaks are added.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/scen28_timing.asm"
 
 # 4. Convert intro typewriter → static (PK-style). rbshura's bank $1F has
@@ -144,6 +150,7 @@ file = "patches/scen28_timing.asm"
 # without manual address bookkeeping.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/intro_double_render.asm"
 
 # 5a2. Finish the intro/ending relocation: flip the engine text-setup's
@@ -153,6 +160,7 @@ file = "patches/intro_double_render.asm"
 # filled the screen with garbage. See the patch header for full detail.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/intro_dest_bank.asm"
 
 # 5b. Post-intro-scroll character-narration screens -> HALF-WIDTH render-at-once.
@@ -165,6 +173,7 @@ file = "patches/intro_dest_bank.asm"
 # narration_halfwidth.asm. See docs/ending_narration_plan.md + memory.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/narration_render.asm"
 
 # 6. Special-move "attack name" word-art (e.g. Dragon Wave) — relocated to bank
@@ -254,6 +263,7 @@ palette-anchors = "4:E7E700,5:FF5A08"
 
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/attack_names_reloc.asm"
 
 # Title BG1 logo (RUSHING BEAT + 修羅) relocated to $E1:1000, gated to the main
@@ -294,6 +304,7 @@ meta-offset = "$21A200"     # metasprite table -> $E1:A200
 
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/title_logo_reloc.asm"
 
 # G3: press START on the RUSHING BEAT / JALECO splash screens -> skip to title.
@@ -307,6 +318,7 @@ file = "patches/title_logo_reloc.asm"
 # G2: add EN translation credit line to the RUSHING BEAT copyright splash.
 [[rom.build.sections]]
 kind = "asar"
+cache = "1"
 file = "patches/intro_credit.asm"
 
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
