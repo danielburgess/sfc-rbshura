@@ -51,15 +51,25 @@ jobs:
           name: apply_patch-windows
           path: build/exe/apply_patch.exe
 
+      - name: Assemble release zip
+        # Bundle the user-facing files into ONE archive so the release asset list
+        # shows a single download (plus GitHub's auto source archives) rather than
+        # five loose files. Contents at the zip root: the Windows patcher, the
+        # cross-platform Python patcher, both raw patches, and the readme.
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path stage | Out-Null
+          Copy-Item build/exe/apply_patch.exe stage/
+          Copy-Item dist/apply_patch.py       stage/
+          Copy-Item dist/rbshura_en.ips       stage/
+          Copy-Item dist/rbshura_en.xdelta    stage/
+          Copy-Item readme.md                 stage/
+          Compress-Archive -Path stage/* -DestinationPath RushingBeatShura_1.0_en_patch.zip -Force
+
       - name: Attach assets to the GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            build/exe/apply_patch.exe
-            dist/apply_patch.py
-            dist/rbshura_en.ips
-            dist/rbshura_en.xdelta
-            readme.md
+          files: RushingBeatShura_1.0_en_patch.zip
           fail_on_unmatched_files: true
           generate_release_notes: true
