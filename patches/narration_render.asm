@@ -32,7 +32,10 @@
 
 hirom
 
-!FONT_BANK = $00D0          ; PK font source bank (file $100000 = $D0:0000)
+!FONT_BANK = $00E2          ; relocated EN+PT font ($E2:0000 = file $220000).
+                            ; Was $00D0 ($100000); moved so the 13 Brazilian-
+                            ; Portuguese accents (slots 0x4C..0x58) fit past the
+                            ; full 80-slot region. See patches/font_reloc.asm.
 
 ; =========================================================================
 ; Entry hook: replace the fadeScreenIn entry ($05:F18C, the $00C9!=4 render

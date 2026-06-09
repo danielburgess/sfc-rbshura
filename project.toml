@@ -4,10 +4,22 @@
 # Top-level scalars MUST come before any [section] header in TOML.
 data_dirs = ["tables"]
 jp_data_dir = "data/jp"
-en_data_dir = "data/en"
+# Per-language source-text roots. Each `<lang>_data_dir` names that language's
+# script directory; the build resolves every DataDef's text as
+# {root}/{name}.txt.
+en_data_dir = "data/en"                # English source script
+br_pt_data_dir = "data/br_pt"          # Brazilian-Portuguese source script
+
+# Which language THIS project builds. `build_lang` makes the build read from the
+# matching `<lang>_data_dir` (here data/br_pt) WITHOUT repurposing `en_data_dir`,
+# so the variable names stay honest. On the br-pt branch this builds the pt-BR
+# ROM out of the box (out/rbshura_br_pt.sfc) from data/br_pt + the rbshura_br_pt
+# tables. Set to "en" (or remove) to build English. data/br_pt currently holds a
+# copy of the EN script as the translation starting point.
+build_lang = "br_pt"
 
 [rom]
-name = "rbshura_en"
+name = "rbshura_br_pt"
 # Pristine JP source. Every transformation that turns it into the EN ROM
 # (PK font, tight renderer, 24-bit pointer engine, char_names, 14 scenarios)
 # is expressed below as a [[rom.build.sections]] entry. The build is one
@@ -78,7 +90,17 @@ freespace = [
     #   $E1:A300 Phase0Skip stub (patches/intro_skip.asm — START skips splashes; SHELVED/disabled)
     #   $E1:A340 DrawCredit + EN credit string (patches/intro_credit.asm — G2 splash credit)
     # See TITLE_INTRO_PLAN.md Phase 1/2/3.
-    ["$21A3C0", "$400000"],   # $E1:A3C0..$FF:FFFF   (post-title-art + intro-skip + credit)
+    ["$21A3C0", "$220000"],   # $E1:A3C0..$E1:FFFF   (post-title-art + intro-skip + credit)
+    # $E2:0000..$E2:3FFF (file $220000..$224000) reserved for the RELOCATED
+    # EN+PT font (fonts/rbshura_font_ext.bin). The font is 89 slots / 5696 B
+    # today but this reserves a full 16 KiB ($4000) = up to 256 glyph slots, so
+    # adding glyphs NEVER needs a freespace edit (only a font rebuild +
+    # --update-audit). $4000 also covers the dialogue renderer's dead page-2
+    # base ($E2:4000) so a stray branch-2 read lands in reserved space, not
+    # text. The font was moved off its full 80-slot region at $100000
+    # ($D0:0000) so the 13 Brazilian-Portuguese accents (slots 0x4C..0x58) fit;
+    # renderers repointed $D0->$E2 by patches/font_reloc.asm + narration_render.asm.
+    ["$224000", "$400000"],   # $E2:4000..$FF:FFFF   (text/data allocation pool, ~1.9 MB)
 ]
 
 # ---- Inline sections: font + engine patches ----
@@ -94,6 +116,27 @@ freespace = [
 kind = "bin"
 file = "fonts/rbshura_en.bin"
 offset = "$100000"
+
+# 1b. RELOCATED + EXTENDED font at $E2:0000 (file $220000). Same 80 PK Latin
+# slots as the $100000 font (byte-identical for 0x00..0x4B) PLUS the 13
+# Brazilian-Portuguese accents at slots 0x4C..0x58 (Éáéíóúâêôàãõç). The
+# $100000 font is full (slots 0x4C..0x4F free; $101400+ is live graphics), so
+# the accents could not be added in place. patches/font_reloc.asm repoints the
+# dialogue + intro renderers' font base $D0->$E2, and narration_render.asm sets
+# !FONT_BANK=$E2, so every text path reads this font. The original $100000 font
+# is kept as a safety net for any un-repointed site. Regenerate via
+# tools/make_pt_accents.py (reads fonts/rbshura_en.bin + composites accents).
+[[rom.build.sections]]
+kind = "bin"
+file = "fonts/rbshura_font_ext.bin"
+offset = "$220000"
+
+# 1c. Repoint the dialogue ($05:83BC/$83D1) + intro/fadeScreenIn ($05:F1E8)
+# font-source bank $D0->$E2 (single-byte operand pokes). See the patch header.
+[[rom.build.sections]]
+kind = "asar"
+cache = "1"
+file = "patches/font_reloc.asm"
 
 # 2. Tight-8 renderer patch — single-tile-column per char, 32 chars/line.
 [[rom.build.sections]]
@@ -182,7 +225,9 @@ file = "patches/narration_render.asm"
 # 2bpp tiles + a projected 128-entry BG3 tilemap (palette-anchors map furigana
 # colours -> CGRAM pal4, kanji -> pal5; tile-base $E0 = the VRAM slot the loader
 # DMAs into; map-base-entry places the plate in the same screen window as stock).
-# Use the English plate (<idx>_<slug>_en.png) where it exists, the dumped
+# The file= paths use ${lang} (= build_lang), so the build picks
+# <idx>_<slug>_<lang>.png (e.g. _br_pt). Make a _<lang> copy of each English
+# plate (<idx>_<slug>_en.png) and edit it; use the dumped
 # Japanese plate otherwise. The companion asar patch repoints the loader source
 # bank ($CF->$E1), bumps the tile DMA count ($200->$240 = 36 tiles), and rewrites
 # the source-address table $82:DC8C with the $E1 offsets (idx 4 dups dragon_wave).
@@ -191,7 +236,7 @@ file = "patches/narration_render.asm"
 # $E1 layout: tiles[i] at $E1:(i*$240); maps[i] at $E1:($900 + i*$100).
 [[rom.build.sections]]
 kind = "graphics"
-file = "export/attack_names/0_thunder_edge_en.png"   # English
+file = "export/attack_names/0_thunder_edge_${lang}.png"   # English
 bpp = 2
 offset = "$210000"          # tiles -> $E1:0000
 tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
@@ -209,7 +254,7 @@ palette-anchors = "4:E7E700,5:FF5A08"
 
 [[rom.build.sections]]
 kind = "graphics"
-file = "export/attack_names/1_assault_tiger_en.png"
+file = "export/attack_names/1_assault_tiger_${lang}.png"
 bpp = 2
 offset = "$210240"          # tiles -> $E1:0240
 tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
@@ -227,7 +272,7 @@ palette-anchors = "4:E7E700,5:FF5A08"
 
 [[rom.build.sections]]
 kind = "graphics"
-file = "export/attack_names/2_dragon_wave_en.png"
+file = "export/attack_names/2_dragon_wave_${lang}.png"
 bpp = 2
 offset = "$210480"          # tiles -> $E1:0480
 tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
@@ -245,7 +290,7 @@ palette-anchors = "4:E7E700,5:FF5A08"
 
 [[rom.build.sections]]
 kind = "graphics"
-file = "export/attack_names/3_bird_storm_en.png"
+file = "export/attack_names/3_bird_storm_${lang}.png"
 bpp = 2
 offset = "$2106C0"          # tiles -> $E1:06C0
 tile-count = 36       # MUST be <= 36: each $E1 tile slot is $240 (36 tiles) and matches the DMA count; >36 overruns into the next slot / the tilemaps
@@ -273,7 +318,7 @@ file = "patches/attack_names_reloc.asm"
 # final 4bpp tiles (256 tiles). To redraw: export/title_bg1_logo.png ->
 # superfamiconv 4bpp -> assets/title_logo.bin (keep tile grid / tilemap).
 # EN title BG1 logo — custom graphics encoder, runs DURING the build.
-# tools/encode_title_logo.py quantizes export/title_bg1_logo_en.png to the
+# tools/encode_title_logo.py quantizes export/title_bg1_logo_${lang}.png to the
 # original CGRAM pal 4/5/6 and emits: a 16 KiB char (512 tiles; expanded 8K->16K
 # for the EN art's ~346 tiles) at $E1:1000, and the BG1 tilemap spliced into the
 # 12 KiB BG1+BG2+BG3 combined blob at $E1:7000. Relocated + gated to the title
@@ -283,12 +328,12 @@ file = "patches/attack_names_reloc.asm"
 [[rom.build.sections]]
 kind = "graphics"
 encoder = "tools/encode_title_logo.py:build"
-file = "export/title_bg1_logo_en.png"
+file = "export/title_bg1_logo_${lang}.png"
 offset = "$211000"          # char  -> $E1:1000 (16 KiB)
 map-offset = "$217000"      # tilemap blob -> $E1:7000 (12 KiB)
 
 # EN 修羅→"SHURA" kanji = OBJ sprites — custom graphics encoder.
-# tools/encode_title_kanji_meta.py tiles export/title_kanji_en_expanded.png
+# tools/encode_title_kanji_meta.py tiles export/title_kanji_${lang}_expanded.png
 # (140x72) into 16x16 sprites and emits 8 KiB OBJ tiles at $E1:5000 + a NEW
 # metasprite table at $E1:A200. The metasprite pointer in SetupSpriteAndUI is
 # repointed there (gated $00C8==2) so other screens keep the original 修羅.
@@ -296,7 +341,7 @@ map-offset = "$217000"      # tilemap blob -> $E1:7000 (12 KiB)
 [[rom.build.sections]]
 kind = "graphics"
 encoder = "tools/encode_title_kanji_meta.py:build"
-file = "export/title_kanji_en_expanded.png"
+file = "export/title_kanji_${lang}_expanded.png"
 offset = "$215000"          # OBJ tiles -> $E1:5000 (8 KiB)
 meta-offset = "$21A200"     # metasprite table -> $E1:A200
 # center-x = "183"          # uncomment to override the SHURA on-screen center
@@ -323,7 +368,7 @@ file = "patches/intro_credit.asm"
 
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads
-# data/{en,jp}/intro.txt + tables/rbshura_en.tbl and encodes at build time.
+# data/br_pt/intro.txt + tables/rbshura_br_pt.tbl and encodes at build time.
 #
 # Scenario 28 (engine ending — WRAM-resident L4 table). ROM source bytes
 # are at $18F482 but the engine applies a ROM→WRAM transformation

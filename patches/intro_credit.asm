@@ -1,6 +1,6 @@
 ; -----------------------------------------------------------------------------
-; intro_credit.asm — G2: add an English-version translation credit line to the
-; "RUSHING BEAT 修羅" copyright splash, beneath "ALL RIGHTS RESERVED".
+; intro_credit.asm — G2: add a Brazilian-Portuguese translation credit line to
+; the "RUSHING BEAT 修羅" copyright splash, beneath "ALL RIGHTS RESERVED".
 ; -----------------------------------------------------------------------------
 ; The splash copyright text is an ASCII string table at $DF:E594, drawn by an
 ; inline renderer ($DF:E55F): for each entry `[u16 VMADD pos][ASCII...][$00]`
@@ -19,8 +19,10 @@
 ;
 ; Position $6302 = tilemap word $6000 + row 24*32 + col 2 (directly below
 ; "ALL RIGHTS RESERVED" at $62E7 = row 23; row 25 clipped at the screen edge).
-; 28 chars (cols 2..29) fit the 32-wide map. All needed glyphs (A-Z, 0-9, space,
-; '-'=$2D) exist in the splash font.
+; Up to 28 chars (cols 2..29) fit the 32-wide map. The splash font is
+; ASCII-indexed and uppercase-only (glyphs A-Z, 0-9, space, '-'=$2D) — it has
+; NO accented letters, so the pt-BR credit must be unaccented uppercase ASCII
+; (e.g. "VERSAO", not "VERSÃO").
 ; -----------------------------------------------------------------------------
 
 hirom
@@ -61,6 +63,8 @@ DrawCredit:
     RTL
 
 CreditStr:
-    db "ENGLISH VERSION - DACKR 2026", $00
+    ; pt-BR credit. ASCII uppercase only (no accents — see note above), <= 28
+    ; chars. Edit the translator/attribution text as needed.
+    db "VERSAO PT-BR - DACKR 2026", $00
 
 assert pc() <= $E1A3C0, "DrawCredit overflowed its reserved slot"

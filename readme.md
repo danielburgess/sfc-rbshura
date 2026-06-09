@@ -37,9 +37,34 @@ localization.
 
 ## Status
 
-**1.1 release.** The translation is complete and the build is verified.
+**English: 1.1 release.** The English translation is complete and the build is verified.
+
+**Brazilian Portuguese (`pt-BR`): in progress — unreleased.** A Brazilian-Portuguese
+translation is being prepared on the **`br-pt`** branch. On this branch the build is
+wired to produce the pt-BR ROM **out of the box** — `project.toml` sets
+`build_lang = "br_pt"`, so `scripts/build.sh` reads the script from **`data/br_pt/`**
+(the 15 `scenario_*.txt`, `char_names.txt`, `intro.txt`, `narration_screens.txt`) and the
+`tables/rbshura_br_pt.tbl` encoding, and writes `out/rbshura_br_pt.sfc`. (`en_data_dir`
+still points only at the untouched English reference in `data/en/`.)
+
+It is **not released**: `data/br_pt/` currently holds a copy of the English text as a
+translation starting point, so no actual Portuguese text exists yet. The engine
+groundwork is in place — the `pt-BR` encoding table, the accented-glyph set
+(`Éáéíóúâêôàãõç`), and a relocated/extended font at `$E2` with the renderers' font base
+repointed so the extra glyphs fit (the original `$100000` font is full). The font
+relocation is built and audit-clean but **still needs in-emulator verification** that
+all text paths render correctly. No `pt-BR` patch is available yet.
 
 ### Changelog
+
+**Unreleased (`br-pt` branch)**
+- Brazilian-Portuguese build, wired to build out of the box via `build_lang = "br_pt"`
+  in `project.toml`: `data/br_pt/` script tree, `tables/rbshura_br_pt.tbl` referenced by
+  all scenario/intro/narration tables, the Portuguese accented-character glyph set, and a
+  relocated/extended font at `$E2`. `en_data_dir` keeps pointing only at the English
+  reference (`data/en/`).
+- Windows helper scripts for contributors (`scripts/win/`): one-shot environment
+  setup, a script-editor launcher, a build wrapper, and a Portuguese `README.pt-BR.md`.
 
 **1.1**
 - Fixed a background-graphics corruption on the Metal Frame Factory stage. The
@@ -145,6 +170,61 @@ write footprint (used by the audit).
 only, no ROM data). Pushing a `vX.Y` tag triggers `.github/workflows/release.yml`, which
 PyInstaller-builds `apply_patch.exe` on a Windows runner and attaches all four assets to
 the GitHub Release. (CI never builds the ROM — the source ROM is gitignored.)
+
+---
+
+## Localizing to another language
+
+Everything that has to be changed to localize the game into a new language lives in
+just a few places. The Brazilian-Portuguese (`pt-BR`) effort on the `br-pt` branch is
+the working example.
+
+**The complete set of localizable assets:**
+
+| What | Where | Notes |
+|---|---|---|
+| What | Where | Notes |
+|---|---|---|
+| **Script text** (all in-game text) | `data/<lang>/` | The 15 scenario scripts (`scenario_00`…`scenario_28`), HUD names (`char_names`), opening crawl (`intro`), and ending-narration screens (`narration_screens`). Start by copying `data/en/`. All of these are editable in the script editor (`script_editor.py`). |
+| **Special-move name plates** (word-art) | `export/attack_names/*_<lang>.png` | Re-draw the move-name graphics (e.g. "Dragon Wave"). Copy the `*_en.png` plates to `*_<lang>.png`. |
+| **Title "SHURA" art** | `export/title_kanji_<lang>_expanded.png` | The large title kanji rendered as OBJ sprites. Copy from `…_en_expanded.png`. |
+| **Title "RUSHING BEAT" logo** | `export/title_bg1_logo_<lang>.png` | The BG1 title-logo art. Copy from `…_logo_en.png`. |
+
+Editing those four things is **all that's normally needed** to produce the game in another
+language. The graphics `file=` paths in `project.toml` use the `${lang}` variable (e.g.
+`export/title_bg1_logo_${lang}.png`), so the build automatically picks the art matching
+`build_lang` — make a `_<lang>` copy of each English plate and edit it. Two supporting
+files round it out:
+
+- **Encoding table** — `tables/rbshura_<lang>.tbl` (maps characters → font slots). If the
+  language needs glyphs the font lacks (e.g. accented letters), add them with
+  `tools/make_pt_accents.py` / `tools/font_png.py` and relocate the font as in
+  `patches/font_reloc.asm`.
+- **Splash credit** — `patches/intro_credit.asm` holds the on-screen translation-credit
+  string shown on the copyright splash. The splash font is uppercase ASCII only (no
+  accents).
+
+**Wiring a language into the build.** Add a `<lang>_data_dir = "data/<lang>"` scalar to
+`project.toml`, point the tables' `table_file` at `tables/rbshura_<lang>.tbl`, set
+`build_lang = "<lang>"`, and make the `_<lang>` graphics copies. The build then sources
+its text from `data/<lang>/`, its art from the `_<lang>` PNGs, and writes
+`out/<rom.name>.sfc` — `en_data_dir` stays pointing only at the English reference. (Set
+`build_lang = "en"` or remove it to build English again.)
+
+> **Renaming files?** The build resolves assets by name/path, so if you **rename** any
+> of these files you must update the file that references it:
+> - A renamed **table** (`tables/*.tbl`) → update `table_file = "..."` in every
+>   `tables/scenario_*.toml` (and `intro.toml` / `narration.toml`) that uses it.
+> - A renamed **graphics/bin/font** file → update its `file = "..."` path in the
+>   matching `[[rom.build.sections]]` entry in `project.toml`.
+> - A renamed **script text** file → its stem must still match the DataDef `name`
+>   in the corresponding `tables/*.toml` (the build reads `<lang>_data_dir/<name>.txt`),
+>   so rename the `name =` or the file to keep them in sync.
+
+Text size is unconstrained for the scenario scripts — they are allocated from the ROM's
+free-space pool, so longer or shorter translations build without any config change. (The
+`intro` and `narration_screens` regions are fixed-size; very long text there can overflow
+and needs the reserved region widened.)
 
 ---
 

@@ -3,7 +3,7 @@
 # the whole region as one 1838-byte fixed record with two named fields,
 # matched to the `<<$1FC8F1:0.partN>>` headers in data/{lang}/intro.txt.
 #
-# Encoding uses tables/rbshura_en.tbl (or whichever language table is
+# Encoding uses tables/rbshura_br_pt.tbl (or whichever language table is
 # active for the editable folder). The intro renderer reads bytes
 # directly and dispatches FE XX as a 2-byte kanji escape — if the user
 # leaves residual JP / kanji characters in their translation, those need
@@ -40,7 +40,7 @@ name = "intro"
 type = "fixed"
 
 [encoding]
-table_file = "tables/rbshura_en.tbl"
+table_file = "tables/rbshura_br_pt.tbl"
 terminator = 0xFF
 
 [data]

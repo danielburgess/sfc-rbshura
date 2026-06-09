@@ -33,9 +33,63 @@ from typing import Optional
 from PIL import Image
 
 ROOT = Path(__file__).parent
-DEFAULT_EN_DATA_DIR = ROOT / "data" / "en"
-DEFAULT_JP_DATA_DIR = ROOT / "data" / "jp"
-EN_TABLE_PATH = ROOT / "tables" / "rbshura_en.tbl"
+
+
+def _load_project_config(root: Path) -> dict:
+    """Pull editor defaults from project.toml so the editor follows the build.
+
+    Reads `build_lang` + the `<lang>_data_dir` scalars to pick which language's
+    script to edit, plus `jp_data_dir`, the matching `tables/rbshura_<lang>.tbl`,
+    and the built ROM name (`[rom].name` under `[rom.build].output_dir`). Every
+    value is optional — missing project.toml or keys fall back to the EN
+    defaults below. Returns absolute Paths.
+    """
+    cfg: dict = {}
+    pt = root / "project.toml"
+    if not pt.exists():
+        return cfg
+    try:
+        import tomllib
+        with pt.open("rb") as f:
+            data = tomllib.load(f)
+    except Exception:
+        return cfg
+
+    dirs = {
+        k[: -len("_data_dir")].lower(): v
+        for k, v in data.items()
+        if isinstance(k, str) and k.endswith("_data_dir") and isinstance(v, str) and v
+    }
+    lang = data.get("build_lang")
+    lang = lang.lower() if isinstance(lang, str) and lang else "en"
+    cfg["lang"] = lang
+
+    src = dirs.get(lang) or dirs.get("en")          # build language's script dir
+    if src:
+        cfg["data_dir"] = (root / src).resolve()
+    if dirs.get("jp"):
+        cfg["jp_dir"] = (root / dirs["jp"]).resolve()
+
+    tbl = root / "tables" / f"rbshura_{lang}.tbl"
+    if tbl.exists():
+        cfg["table"] = tbl
+
+    rom = data.get("rom") or {}
+    name = rom.get("name")
+    out_dir = (rom.get("build") or {}).get("output_dir", "out")
+    if isinstance(name, str) and name:
+        cfg["rom"] = (root / out_dir / f"{name}.sfc").resolve()
+    return cfg
+
+
+_PROJECT = _load_project_config(ROOT)
+
+# Defaults follow project.toml's `build_lang` (the editor edits whatever the
+# project currently builds — e.g. data/br_pt), with EN fallbacks for a bare
+# checkout. All are overridable per-user via set_settings()/pick_folder().
+DEFAULT_EN_DATA_DIR = _PROJECT.get("data_dir") or (ROOT / "data" / "en")
+DEFAULT_JP_DATA_DIR = _PROJECT.get("jp_dir") or (ROOT / "data" / "jp")
+EN_TABLE_PATH = _PROJECT.get("table") or (ROOT / "tables" / "rbshura_en.tbl")
 PORTRAIT_ASSETS = ROOT / "assets" / "portraits"
 
 # Per-user editor state (last scenario / entry / cursor + folder config).
@@ -48,19 +102,25 @@ EDITOR_STATE_PATH = ROOT / ".editor-state.json"
 # may be overridden via set_settings().
 EN_DATA_DIR = DEFAULT_EN_DATA_DIR
 
-# Source-of-truth font for the preview is fonts/rbshura_en.bin — the same
-# binary the retrotool build pastes into the ROM at $100000. The editor reads
-# it directly so the preview reflects the current font without needing a full
-# build to land. Palettes still come from the ROM (extracted from $058313).
-FONT_BIN_PATH = ROOT / "fonts" / "rbshura_en.bin"
-ROM_CANDIDATES = [
+FONT_SLOT_STRIDE = 64        # rbshura's per-glyph slot
+# Preview font: prefer the relocated/extended font (fonts/rbshura_font_ext.bin)
+# — it carries the pt-BR accent glyphs (slots 0x4C..0x58), so accented text
+# previews correctly. Fall back to the 80-slot base font (fonts/rbshura_en.bin,
+# what the build pastes at $100000). Read directly so the preview reflects the
+# current font without a full build. Palettes still come from the ROM ($058313).
+_EXT_FONT = ROOT / "fonts" / "rbshura_font_ext.bin"
+FONT_BIN_PATH = _EXT_FONT if _EXT_FONT.exists() else (ROOT / "fonts" / "rbshura_en.bin")
+# Glyph count = however many 64-byte slots the chosen font actually has (89 for
+# the extended font, 80 for the base) — drives the font-tile preview grid.
+FONT_GLYPH_COUNT = (FONT_BIN_PATH.stat().st_size // FONT_SLOT_STRIDE
+                    if FONT_BIN_PATH.exists() else 80)
+ROM_CANDIDATES = [c for c in (_PROJECT.get("rom"),) if c] + [
+    ROOT / "out/rbshura_br_pt.sfc",
     ROOT / "out/rbshura_en.sfc",
     ROOT / "out/rbshura_pkfont_24bit.sfc",
     ROOT / "out/rbshura_pkfont.sfc",
 ]
 FONT_PC = 0x100000           # absolute ROM offset (kept for reference / extract logic)
-FONT_SLOT_STRIDE = 64        # rbshura's per-glyph slot
-FONT_GLYPH_COUNT = 80        # PK Latin range $00..$4F — what the bin covers
 
 # Kanji font (intro renderer's FE-escape table). 256 × 64 B = 16 KB at ROM
 # $104000. Each glyph is 16x16 = 4 tiles in TL/TR/BL/BR order. See
@@ -91,6 +151,15 @@ SCENARIO_CONFIG: dict[str, dict] = {
         # Intro is full-screen on a dark backdrop, not a bordered dialog
         # box. We still draw a thin frame around the preview for
         # legibility but skip the speaker-palette compositing.
+        "dialog_box": False,
+    },
+    # Character-ending narration screens ($1F:C57F idx 1-19) — half-width,
+    # render-at-once, 32 tile-columns wide like the intro. Pure Latin (no
+    # kanji escape). See tables/narration.toml / patches/narration_render.asm.
+    "narration_screens": {
+        "cols_per_line": 32,
+        "kanji_escape": False,
+        "mixed_width": True,
         "dialog_box": False,
     },
 }
@@ -892,7 +961,8 @@ class Bridge:
         """
         self.scenarios = {}
         self.jp_scenarios = {}
-        patterns = ("scenario_*.txt", "char_names.txt", "intro.txt")
+        patterns = ("scenario_*.txt", "char_names.txt", "intro.txt",
+                    "narration_screens.txt")
         for pat in patterns:
             for p in sorted(self.en_data_dir.glob(pat)):
                 self.scenarios[p.stem] = Scenario(p)

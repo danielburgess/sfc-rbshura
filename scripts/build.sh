@@ -49,4 +49,4 @@ if [ "$do_patcher" = 1 ]; then
     $VENV/python tools/make_patcher.py
 fi
 
-echo "==> OK: out/rbshura_en.sfc built and audited."
+echo "==> OK: out/rbshura_br_pt.sfc built and audited."

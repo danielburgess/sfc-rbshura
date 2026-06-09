@@ -3,7 +3,7 @@ name = "scenario_16"
 type = "pointer"
 
 [encoding]
-table_file = "tables/rbshura_en.tbl"
+table_file = "tables/rbshura_br_pt.tbl"
 terminator = 0xFF
 
 [pointers]
