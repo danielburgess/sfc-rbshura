@@ -7,14 +7,19 @@ matches the in-game dialog rendering:
   - Half-width font: each glyph is 8x16 (1 tile column wide × 2 tiles tall),
     matching the apply_pk_font.py tight renderer that ships in the build.
   - 24 chars per line (192 px wide text region — the in-game dialog box).
-  - Control codes parsed and visualized: [FD]=newline, [FE]=page break,
-    [F7:FF]=page-wait, [FB:XX]=window cmd, [FC:...] etc.
+  - Control codes: only those with a visual meaning are rendered — [FD]=newline,
+    [FE]=page break. Every OTHER bracketed [XX] byte is IGNORED for preview (its
+    params consumed): F7 (page-wait), the FC/F8-FB opcodes, and raw bytes like
+    narration VRAM-dest positioning words ([10][2A]). Concatenated forms
+    ([FC021408], [F904], [F7FF]) are split into their bytes. This keeps control
+    codes from rendering as phantom spaces or spurious line breaks — e.g.
+    [F7FF][FB10][FE][F708] is a single page break, nothing else.
 
 Autosave: debounced (~400 ms) per-entry; writes are atomic via temp+rename.
 
-Portrait preview is a static placeholder showing the speaker name parsed
-from the entry's [F9:XX] control code. Real sprite + animation is a
-follow-up (needs portrait-table RE).
+Text color follows the speaker palette set by the [F9:XX] control code (the
+per-speaker palette table at ROM $058313) — applied to the preview glyphs.
+No portrait sprite/name is shown (the old placeholder was inaccurate).
 """
 from __future__ import annotations
 
@@ -33,10 +38,63 @@ from typing import Optional
 from PIL import Image
 
 ROOT = Path(__file__).parent
-DEFAULT_EN_DATA_DIR = ROOT / "data" / "en"
-DEFAULT_JP_DATA_DIR = ROOT / "data" / "jp"
-EN_TABLE_PATH = ROOT / "tables" / "rbshura_en.tbl"
-PORTRAIT_ASSETS = ROOT / "assets" / "portraits"
+
+
+def _load_project_config(root: Path) -> dict:
+    """Pull editor defaults from project.toml so the editor follows the build.
+
+    Reads `build_lang` + the `<lang>_data_dir` scalars to pick which language's
+    script to edit, plus `jp_data_dir`, the matching `tables/rbshura_<lang>.tbl`,
+    and the built ROM name (`[rom].name` under `[rom.build].output_dir`). Every
+    value is optional — missing project.toml or keys fall back to the EN
+    defaults below. Returns absolute Paths.
+    """
+    cfg: dict = {}
+    pt = root / "project.toml"
+    if not pt.exists():
+        return cfg
+    try:
+        import tomllib
+        with pt.open("rb") as f:
+            data = tomllib.load(f)
+    except Exception:
+        return cfg
+
+    dirs = {
+        k[: -len("_data_dir")].lower(): v
+        for k, v in data.items()
+        if isinstance(k, str) and k.endswith("_data_dir") and isinstance(v, str) and v
+    }
+    lang = data.get("build_lang")
+    lang = lang.lower() if isinstance(lang, str) and lang else "en"
+    cfg["lang"] = lang
+
+    src = dirs.get(lang) or dirs.get("en")          # build language's script dir
+    if src:
+        cfg["data_dir"] = (root / src).resolve()
+    if dirs.get("jp"):
+        cfg["jp_dir"] = (root / dirs["jp"]).resolve()
+
+    tbl = root / "tables" / f"rbshura_{lang}.tbl"
+    if tbl.exists():
+        cfg["table"] = tbl
+
+    rom = data.get("rom") or {}
+    name = rom.get("name")
+    out_dir = (rom.get("build") or {}).get("output_dir", "out")
+    if isinstance(name, str) and name:
+        cfg["rom"] = (root / out_dir / f"{name}.sfc").resolve()
+    return cfg
+
+
+_PROJECT = _load_project_config(ROOT)
+
+# Defaults follow project.toml's `build_lang` (the editor edits whatever the
+# project currently builds — e.g. data/br_pt), with EN fallbacks for a bare
+# checkout. All are overridable per-user via set_settings()/pick_folder().
+DEFAULT_EN_DATA_DIR = _PROJECT.get("data_dir") or (ROOT / "data" / "en")
+DEFAULT_JP_DATA_DIR = _PROJECT.get("jp_dir") or (ROOT / "data" / "jp")
+EN_TABLE_PATH = _PROJECT.get("table") or (ROOT / "tables" / "rbshura_en.tbl")
 
 # Per-user editor state (last scenario / entry / cursor + folder config).
 # Project-local so it travels with the checkout if someone re-clones.
@@ -48,19 +106,25 @@ EDITOR_STATE_PATH = ROOT / ".editor-state.json"
 # may be overridden via set_settings().
 EN_DATA_DIR = DEFAULT_EN_DATA_DIR
 
-# Source-of-truth font for the preview is fonts/rbshura_en.bin — the same
-# binary the retrotool build pastes into the ROM at $100000. The editor reads
-# it directly so the preview reflects the current font without needing a full
-# build to land. Palettes still come from the ROM (extracted from $058313).
-FONT_BIN_PATH = ROOT / "fonts" / "rbshura_en.bin"
-ROM_CANDIDATES = [
+FONT_SLOT_STRIDE = 64        # rbshura's per-glyph slot
+# Preview font: prefer the relocated/extended font (fonts/rbshura_font_ext.bin)
+# — it carries the pt-BR accent glyphs (slots 0x4C..0x58), so accented text
+# previews correctly. Fall back to the 80-slot base font (fonts/rbshura_en.bin,
+# what the build pastes at $100000). Read directly so the preview reflects the
+# current font without a full build. Palettes still come from the ROM ($058313).
+_EXT_FONT = ROOT / "fonts" / "rbshura_font_ext.bin"
+FONT_BIN_PATH = _EXT_FONT if _EXT_FONT.exists() else (ROOT / "fonts" / "rbshura_en.bin")
+# Glyph count = however many 64-byte slots the chosen font actually has (89 for
+# the extended font, 80 for the base) — drives the font-tile preview grid.
+FONT_GLYPH_COUNT = (FONT_BIN_PATH.stat().st_size // FONT_SLOT_STRIDE
+                    if FONT_BIN_PATH.exists() else 80)
+ROM_CANDIDATES = [c for c in (_PROJECT.get("rom"),) if c] + [
+    ROOT / "out/rbshura_br_pt.sfc",
     ROOT / "out/rbshura_en.sfc",
     ROOT / "out/rbshura_pkfont_24bit.sfc",
     ROOT / "out/rbshura_pkfont.sfc",
 ]
 FONT_PC = 0x100000           # absolute ROM offset (kept for reference / extract logic)
-FONT_SLOT_STRIDE = 64        # rbshura's per-glyph slot
-FONT_GLYPH_COUNT = 80        # PK Latin range $00..$4F — what the bin covers
 
 # Kanji font (intro renderer's FE-escape table). 256 × 64 B = 16 KB at ROM
 # $104000. Each glyph is 16x16 = 4 tiles in TL/TR/BL/BR order. See
@@ -91,6 +155,15 @@ SCENARIO_CONFIG: dict[str, dict] = {
         # Intro is full-screen on a dark backdrop, not a bordered dialog
         # box. We still draw a thin frame around the preview for
         # legibility but skip the speaker-palette compositing.
+        "dialog_box": False,
+    },
+    # Character-ending narration screens ($1F:C57F idx 1-19) — half-width,
+    # render-at-once, 32 tile-columns wide like the intro. Pure Latin (no
+    # kanji escape). See tables/narration.toml / patches/narration_render.asm.
+    "narration_screens": {
+        "cols_per_line": 32,
+        "kanji_escape": False,
+        "mixed_width": True,
         "dialog_box": False,
     },
 }
@@ -132,15 +205,6 @@ FALLBACK_PALETTE = [
 # screenshots. (Future: extract actual BG2 tilemap + palette per
 # [[project_script_editor]] Step 2.)
 DIALOG_BG = (16, 24, 48, 255)
-
-# Portrait names (parsed from [F9][XX]). NAMES ARE NOT YET VERIFIED — the
-# previous mapping (Dick/Spider/Kythring/McCoy/Jimmy/Dag) was inherited
-# from an older preview script and confirmed wrong by user 2026-05-17.
-# User direction: extract sprites first, identify names visually from those.
-# Currently 2 portraits captured (assets/portraits/pid_00.png and
-# pid_02.png from SplitTrace crops); rest are pending more captures.
-PORTRAIT_NAMES: dict[int, str] = {}  # left empty until verified
-
 
 # ---------------------------------------------------------------------------
 # Font extraction
@@ -481,20 +545,27 @@ def _tokenize_brackets(body: str) -> list:
                 i += 1
                 continue
             token = body[i + 1:end]
-            # Accept any of: [XX], [XX:YY:ZZ] (legacy retrotool dump), or
-            # [XX YY ZZ] (space-separated, what our extractors emit).
-            # Walk the token splitting on either separator.
-            parts = re.split(r"[:\s]+", token.strip())
-            valid = all(len(p) == 2 for p in parts if p)
-            if valid and parts:
-                for part in parts:
-                    if not part:
-                        continue
-                    try:
-                        out.append(("byte", int(part, 16)))
-                    except ValueError:
-                        out.append(("char", "[" + token + "]"))
-                        break
+            # Accept: [XX], [XXYY..] (CONCATENATED, e.g. [FC021408] / [F904]),
+            # [XX:YY:ZZ] (legacy retrotool dump), and [XX YY ZZ] (space-
+            # separated, what our extractors emit). Each separator-delimited
+            # part must be an even-length run of hex digits; split it into
+            # individual bytes. (Without the concatenated case, [FC021408] fell
+            # through to a literal char → the $00 space fallback = phantom
+            # spaces in the preview.)
+            parts = [p for p in re.split(r"[:\s]+", token.strip()) if p]
+            bytes_out: list[int] = []
+            ok = bool(parts)
+            for part in parts:
+                if (len(part) >= 2 and len(part) % 2 == 0
+                        and all(ch in "0123456789abcdefABCDEF" for ch in part)):
+                    bytes_out.extend(
+                        int(part[j:j + 2], 16) for j in range(0, len(part), 2))
+                else:
+                    ok = False
+                    break
+            if ok:
+                for b in bytes_out:
+                    out.append(("byte", b))
             else:
                 # Not a hex-byte bracket — render literal so user sees it.
                 out.append(("char", "[" + token + "]"))
@@ -620,13 +691,6 @@ def body_to_lines(
                     i += 1
             else:
                 new_page(); i += 1
-        elif b == 0xF7:
-            # Line-end / page-wait — visualize as a hard break
-            new_line()
-            i += 1
-            # Consume the param byte (the FF / 08 / etc.)
-            if i < len(tokens) and tokens[i][0] == "byte":
-                i += 1
         elif b == 0xFF:
             # Standalone terminator — stop rendering
             break
@@ -647,8 +711,13 @@ def body_to_lines(
             if i < len(tokens) and tokens[i][0] == "byte":
                 i += 1
         else:
-            # Plain printable byte (< 0xF7) → glyph
-            current_line().append(b)
+            # A bracketed [XX] byte with no visual meaning: narration VRAM-dest
+            # positioning words ([10][2A] at a block/line start), stray opcodes,
+            # or other raw control bytes. IGNORE them — renderable glyphs come
+            # from literal characters in the body, not [XX] escapes — so control
+            # codes no longer show up as phantom spaces. (FD newline, FE page-
+            # break, F7 wait, FF terminator, and the FC / F8-FB opcodes are all
+            # handled above; this fall-through is "no specific use → skip".)
             i += 1
 
     # Flatten + word-wrap. With `mixed_width=True`, `cols` is in half-cell
@@ -815,35 +884,22 @@ def render_preview(
 # ---------------------------------------------------------------------------
 
 def extract_portrait_id(body: str) -> Optional[int]:
-    """Find the most recent [F9][XX] in the entry body and return XX as int.
-    Accepts both the canonical two-bracket form (`[F9][02]`) and the
-    legacy colon form (`[F9:02]`) just in case."""
-    # Two-bracket form: `[F9]` immediately followed by `[XX]` (optionally
-    # with whitespace between).
-    m = re.search(r"\[F9\]\s*\[([0-9A-Fa-f]{1,2})\]", body)
-    if m:
-        return int(m.group(1), 16)
-    m = re.search(r"\[F9:([0-9A-Fa-f]+)\]", body)
-    return int(m.group(1), 16) if m else None
+    """Return the speaker-palette id set by the first `F9 XX` control code in
+    the body (the in-game text-color select; see [[project_dialog_color_engine]]
+    — F9 loads the per-speaker palette at $058313). Drives the preview's glyph
+    color only — NOT a portrait sprite.
 
-
-def portrait_name(pid: int) -> str:
-    return PORTRAIT_NAMES.get(pid, f"Portrait #{pid:02X}")
-
-
-def portrait_image_uri(pid: Optional[int]) -> Optional[str]:
-    """Return a `data:image/png;base64,...` URI for the portrait sprite of
-    the given pid, or None if no asset is available yet. Assets live in
-    assets/portraits/pid_XX.png (XX = uppercase hex). Currently sourced
-    from SplitTrace screen crops; will move to ROM-direct extraction once
-    we RE the sprite-data path."""
-    if pid is None:
-        return None
-    candidate = PORTRAIT_ASSETS / f"pid_{pid:02X}.png"
-    if not candidate.exists():
-        return None
-    data = candidate.read_bytes()
-    return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+    Handles every bracket form the data uses by tokenizing: concatenated
+    `[F904]`, two-bracket `[F9][04]`, and colon `[F9:04]` all decode to bytes
+    F9, 04. (The concatenated form is what the scenarios actually contain;
+    the old regex only matched the other two, so the color never applied.)
+    """
+    toks = _tokenize_brackets(body)
+    for i, (kind, val) in enumerate(toks):
+        if kind == "byte" and val == 0xF9:
+            if i + 1 < len(toks) and toks[i + 1][0] == "byte":
+                return toks[i + 1][1]
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -892,7 +948,8 @@ class Bridge:
         """
         self.scenarios = {}
         self.jp_scenarios = {}
-        patterns = ("scenario_*.txt", "char_names.txt", "intro.txt")
+        patterns = ("scenario_*.txt", "char_names.txt", "intro.txt",
+                    "narration_screens.txt")
         for pat in patterns:
             for p in sorted(self.en_data_dir.glob(pat)):
                 self.scenarios[p.stem] = Scenario(p)
@@ -939,14 +996,11 @@ class Bridge:
         for i, e in enumerate(sc.entries):
             preview = re.sub(r"\[[^\]]*\]", "", e["body"]).strip()[:60]
             translated = bool(re.search(r"[A-Za-z]{2,}", e["body"]))
-            pid = extract_portrait_id(e["body"])
             out.append({
                 "i": i,
                 "idx": e["idx"],
                 "preview": preview,
                 "translated": translated,
-                "portrait_id": pid,
-                "portrait_name": portrait_name(pid) if pid is not None else None,
             })
         return out
 
@@ -988,9 +1042,6 @@ class Bridge:
             "body": e["body"],
             "jp_body": jp_body,
             "preview_png": f"data:image/png;base64,{b64}",
-            "portrait_id": pid,
-            "portrait_name": portrait_name(pid) if pid is not None else None,
-            "portrait_image": portrait_image_uri(pid),
             "byte_count": byte_count,
             "jp_byte_count": jp_byte_count,
         }
@@ -1323,17 +1374,6 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
            display: flex; gap: 16px; align-items: flex-start;
            overflow-y: auto; overflow-x: auto; }
 .preview img { display: block; }
-.portrait-box { width: 110px; flex: 0 0 110px; display: flex; flex-direction: column;
-                gap: 6px; align-items: center; }
-.portrait { width: 96px; height: 120px; background: var(--bg2); border: 1px solid var(--brd);
-            display: flex; align-items: center; justify-content: center;
-            color: var(--fg2); font-size: 10px; text-align: center;
-            image-rendering: pixelated; image-rendering: crisp-edges;
-            overflow: hidden; }
-.portrait img { width: 100%; height: 100%; object-fit: contain;
-                image-rendering: pixelated; image-rendering: crisp-edges; }
-.portrait-name { font-size: 11px; color: var(--fg); text-align: center; }
-.portrait-pid { font-size: 10px; color: var(--fg2); font-family: var(--code); }
 .preview img { image-rendering: pixelated; image-rendering: crisp-edges; }
 .text-area { flex: 1; display: grid; grid-template-columns: 1fr 1fr;
              gap: 8px; padding: 12px; overflow: hidden; }
@@ -1443,11 +1483,6 @@ textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; 
     <div class="search-results" id="search-results"></div>
     <div class="panes" id="panes" style="display:none">
       <div class="preview">
-        <div class="portrait-box">
-          <div class="portrait" id="portrait">no<br>portrait</div>
-          <div class="portrait-pid" id="portrait-pid"></div>
-          <div class="portrait-name" id="portrait-name"></div>
-        </div>
         <img id="preview-img" alt="preview" />
       </div>
       <div class="text-area">
@@ -1586,8 +1621,7 @@ async function selectScenario(name) {
     div.className = 'item ' + (e.translated ? 'translated' : 'untranslated');
     div.dataset.i = e.i;
     const marker = e.translated ? '●' : '○';
-    const speaker = e.portrait_name ? ` <span class="meta">${e.portrait_name}</span>` : '';
-    div.innerHTML = `<div><span class="marker">${marker}</span> #${e.idx}${speaker}</div>
+    div.innerHTML = `<div><span class="marker">${marker}</span> #${e.idx}</div>
                      <div class="meta">${escapeHtml(e.preview) || '(empty)'}</div>`;
     div.onclick = () => selectEntry(e.i);
     list.appendChild(div);
@@ -1608,22 +1642,6 @@ async function selectEntry(i) {
   document.getElementById('preview-img').src = e.preview_png;
   setBodyBytes(e.byte_count);
   setJpBodyBytes(e.jp_byte_count);
-  const portraitBox = document.getElementById('portrait');
-  const portraitPid = document.getElementById('portrait-pid');
-  const portraitName = document.getElementById('portrait-name');
-  if (e.portrait_id === null) {
-    portraitBox.innerHTML = 'no<br>F9';
-    portraitPid.textContent = '';
-    portraitName.textContent = '';
-  } else {
-    portraitPid.textContent = 'PID 0x' + e.portrait_id.toString(16).toUpperCase().padStart(2,'0');
-    portraitName.textContent = e.portrait_name || '';
-    if (e.portrait_image) {
-      portraitBox.innerHTML = `<img src="${e.portrait_image}" alt="portrait">`;
-    } else {
-      portraitBox.innerHTML = 'sprite<br>pending';
-    }
-  }
   document.getElementById('ent-label').textContent =
     `${CURRENT.scenario} · entry #${i}`;
   // Loading a new entry resets the badge to idle — any pending save from
