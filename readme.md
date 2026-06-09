@@ -83,10 +83,13 @@ all text paths render correctly. No `pt-BR` patch is available yet.
 
 You need an **unheadered** Japanese *Rushing Beat Shura* ROM:
 
-| | |
-|---|---|
+|           | |
+|-----------|---|
 | File size | `2,097,152` bytes (2 MB) |
-| SHA-256 | `b1c9b743ebab25d9c00153f77f78b494f610227eecaa49f9771f4e76ed6e7815` |
+| CRC-32    | `0A2E4C2F` |
+| MD5       | `325A9D637C9F6E7211B2D413EE1FEF3D` |
+| SHA-1     | `0381086AD61745FB7AAA0B3950434EEF586D3989` |
+| SHA-256 | `00e78318926e5cae79bce0535fddd3dccaa732f5c70e43acefc2769a9899eaed` |
 
 The patcher verifies this automatically (and auto-strips a 512-byte copier header if
 present). The result is a 4 MB English ROM named **`Rushing Beat Shura (English).sfc`**,
