@@ -1,7 +1,8 @@
 # Scripts de apoio para Windows
 
 Scripts PowerShell para colaboradores no Windows (tradutores / quem compila o jogo).
-Eles reproduzem o fluxo de trabalho do Linux (`uv sync` + `scripts/build.sh`).
+O `setup.ps1` cria uma `.venv` e instala **`retrotool[all]` + Pillow do PyPI** (não
+precisa de cópia local); o `build.ps1` é o equivalente Windows do `scripts/build.sh`.
 
 > Para o tradutor: estes três scripts preparam tudo o que você precisa para editar o
 > texto e gerar a ROM em inglês/português. Você **não** precisa saber programar — basta
@@ -85,14 +86,8 @@ então é só editar os arquivos `_br_pt`. O crédito da tradução na tela de a
 - **ROM original.** O `build.ps1` precisa da ROM japonesa original em
   `roms\rbshura.sfc` (não incluída no repositório, por direitos autorais). O editor e
   a compilação não funcionam sem ela.
-- **Dependência do retrotool.** O `pyproject.toml` aponta o motor de compilação
-  `retrotool` para uma cópia local (um caminho absoluto que só existe na máquina do
-  autor). Numa máquina Windows nova, o `uv sync` não consegue resolvê-lo até você
-  apontar para a sua própria cópia do retrotool:
-
-  ```powershell
-  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\win\setup.ps1 -RetrotoolPath C:\caminho\para\retrotool
-  ```
-
-  Isso reescreve `[tool.uv.sources]` no `pyproject.toml` apontando para a sua cópia
-  (um backup é salvo em `pyproject.toml.bak`).
+- **retrotool vem do PyPI.** O `setup.ps1` instala `retrotool[all]` (>=0.9.3, que já
+  inclui os binários libsfx / asar / bass / xdelta) e o Pillow via `uv pip install`.
+  Ele **não** usa `uv sync`, então o apontamento para a cópia local editável no
+  `pyproject.toml` do projeto (`[tool.uv.sources]`, só para a máquina do mantenedor) é
+  ignorado — nada local é necessário.

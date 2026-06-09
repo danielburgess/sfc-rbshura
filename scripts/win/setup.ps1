@@ -4,29 +4,23 @@
 
 .DESCRIPTION
   Installs everything needed to build the ROM and run the script editor:
-    1. Installs `uv` (Astral's Python project manager) if it is missing.
-    2. Uses uv to download a matching CPython (per `requires-python` in
-       pyproject.toml) — no separate Python install needed.
-    3. Creates the project virtual environment (.venv) and installs all
-       dependencies via `uv sync`.
+    1. Installs `uv` (Astral's Python toolchain manager) if it is missing.
+    2. Creates the project virtual environment (.venv) with a matching CPython
+       (uv downloads it if needed).
+    3. Installs retrotool + its bundled-binary toolchains and Pillow FROM PyPI:
+       `retrotool[all]` pulls in libsfx / asar / bass / xdelta.
+
+  Everything comes from PyPI — nothing is sourced from a local checkout. (The
+  project's pyproject.toml pins an editable local retrotool via
+  [tool.uv.sources] for the maintainer's own machine; this script deliberately
+  uses `uv pip install`, which ignores that, so contributors get the published
+  package.)
 
   Run this ONCE per machine (or after dependencies change). After it succeeds,
   use scripts\win\run-editor.cmd and scripts\win\build.cmd.
-
-  NOTE: pyproject.toml currently pins `retrotool` (the build engine) to a local
-  editable checkout. If you are not the original author, you must have a
-  retrotool checkout available and point `[tool.uv.sources]` in pyproject.toml
-  at it (or pass -RetrotoolPath here) — otherwise `uv sync` cannot resolve it.
-
-.PARAMETER RetrotoolPath
-  Optional path to a local retrotool checkout. When given, the script rewrites
-  the `[tool.uv.sources]` retrotool paths in pyproject.toml to point at it
-  before syncing (a backup is written to pyproject.toml.bak).
 #>
 [CmdletBinding()]
-param(
-    [string]$RetrotoolPath
-)
+param()
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -35,6 +29,12 @@ Set-StrictMode -Version Latest
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $RepoRoot
 Write-Host "==> Project: $RepoRoot" -ForegroundColor Cyan
+
+# retrotool[all] = build engine + bundled libsfx/asar/bass/xdelta binaries.
+# >=0.9.3 is required for the `build_lang` selector this project's project.toml
+# uses. Pillow (separate) is used by the script editor + the PNG encoders.
+$RetrotoolSpec = 'retrotool[all]>=0.9.3'
+$PyVersion = '3.13'                       # matches pyproject requires-python
 
 # --- 1. Ensure uv is installed --------------------------------------------
 function Test-Command($name) {
@@ -46,10 +46,10 @@ if (-not (Test-Command 'uv')) {
     try {
         Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
     } catch {
-        throw "Failed to install uv automatically. Install it manually from https://docs.astral.sh/uv/ and re-run this script. ($_)"
+        throw "Failed to install uv automatically. Install it from https://docs.astral.sh/uv/ and re-run this script. ($_)"
     }
-    # The installer adds uv to %USERPROFILE%\.local\bin for the *future* shells;
-    # add it to this session's PATH so the rest of the script can use it.
+    # The installer adds uv to %USERPROFILE%\.local\bin for future shells; add it
+    # to this session's PATH so the rest of the script can use it now.
     $uvBin = Join-Path $env:USERPROFILE '.local\bin'
     if (Test-Path (Join-Path $uvBin 'uv.exe')) { $env:Path = "$uvBin;$env:Path" }
     if (-not (Test-Command 'uv')) {
@@ -58,41 +58,26 @@ if (-not (Test-Command 'uv')) {
 }
 Write-Host ("==> uv: " + (uv --version)) -ForegroundColor Green
 
-# --- 2. Optional: repoint retrotool source at a local checkout -------------
-if ($RetrotoolPath) {
-    $rt = (Resolve-Path $RetrotoolPath).Path
-    if (-not (Test-Path $rt)) { throw "RetrotoolPath not found: $rt" }
-    $pyproj = Join-Path $RepoRoot 'pyproject.toml'
-    Copy-Item $pyproj "$pyproj.bak" -Force
-    Write-Host "==> Pointing [tool.uv.sources] retrotool at $rt (backup: pyproject.toml.bak)" -ForegroundColor Cyan
-    # Replace the hard-coded /mnt/crucial/projects/retrotool prefix with the
-    # supplied checkout. Forward slashes are valid in TOML on Windows.
-    $rtFwd = $rt -replace '\\','/'
-    (Get-Content $pyproj -Raw) `
-        -replace '/mnt/crucial/projects/retrotool', $rtFwd `
-        | Set-Content $pyproj -NoNewline
-}
+# --- 2. Create the virtual environment (.venv) ----------------------------
+# uv downloads CPython $PyVersion if the machine doesn't have it.
+Write-Host "==> Creating .venv (CPython $PyVersion)..." -ForegroundColor Cyan
+uv venv --python $PyVersion
+if ($LASTEXITCODE -ne 0) { throw "uv venv failed (exit $LASTEXITCODE)." }
 
-# --- 3. Sync the environment (downloads Python + installs deps) ------------
-Write-Host "==> uv sync (downloads CPython, creates .venv, installs deps)..." -ForegroundColor Cyan
-try {
-    uv sync
-} catch {
-    Write-Host ""
-    Write-Host "uv sync failed." -ForegroundColor Red
-    Write-Host "The most common cause is the `retrotool` dependency: pyproject.toml's" -ForegroundColor Yellow
-    Write-Host "[tool.uv.sources] points it at a local checkout that doesn't exist here." -ForegroundColor Yellow
-    Write-Host "Re-run with:  scripts\win\setup.ps1 -RetrotoolPath C:\path\to\retrotool" -ForegroundColor Yellow
-    throw
-}
+# --- 3. Install dependencies FROM PyPI ------------------------------------
+# `uv pip install <pkg>` installs the named packages from PyPI into .venv — it
+# does NOT read pyproject.toml's [tool.uv.sources], so no local/editable
+# checkout is used.
+Write-Host "==> Installing $RetrotoolSpec + pillow from PyPI..." -ForegroundColor Cyan
+uv pip install $RetrotoolSpec pillow
+if ($LASTEXITCODE -ne 0) { throw "uv pip install failed (exit $LASTEXITCODE)." }
 
 # --- 4. Verify ------------------------------------------------------------
 $retro = Join-Path $RepoRoot '.venv\Scripts\retrotool.exe'
 if (Test-Path $retro) {
-    Write-Host "==> OK. Environment ready (.venv created, retrotool installed)." -ForegroundColor Green
+    Write-Host "==> OK. Environment ready (.venv created, retrotool[all] + pillow installed from PyPI)." -ForegroundColor Green
     Write-Host "    Next:  scripts\win\run-editor.cmd   (script editor)" -ForegroundColor Green
     Write-Host "           scripts\win\build.cmd        (build the ROM)" -ForegroundColor Green
 } else {
-    Write-Host "==> uv sync completed but .venv\Scripts\retrotool.exe is missing." -ForegroundColor Yellow
-    Write-Host "    Check that the retrotool dependency resolved correctly." -ForegroundColor Yellow
+    throw ".venv\Scripts\retrotool.exe is missing after install — check the output above."
 }

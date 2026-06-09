@@ -1,7 +1,8 @@
 # Windows helper scripts
 
-PowerShell scripts for Windows contributors (translators / builders). They mirror
-the Linux workflow (`uv sync` + `scripts/build.sh`).
+PowerShell scripts for Windows contributors (translators / builders). `setup.ps1`
+creates a `.venv` and installs **`retrotool[all]` + Pillow from PyPI** (no local
+checkout needed); `build.ps1` is the Windows equivalent of `scripts/build.sh`.
 
 | Script | Purpose                                                                                                                                  |
 |---|------------------------------------------------------------------------------------------------------------------------------------------|
@@ -35,14 +36,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\win\build.ps1 -Updat
 
 - **Source ROM.** `build.ps1` needs the pristine Japanese ROM at `roms\rbshura.sfc`
   (gitignored for copyright). The editor and build will not run without it.
-- **retrotool dependency.** `pyproject.toml` pins the `retrotool` build engine to a
-  local editable checkout (an absolute path that only exists on the original
-  author's machine). On a fresh Windows machine `uv sync` cannot resolve it until
-  you point it at your own retrotool checkout:
-
-  ```powershell
-  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\win\setup.ps1 -RetrotoolPath C:\path\to\retrotool
-  ```
-
-  That rewrites `[tool.uv.sources]` in `pyproject.toml` to your checkout (a backup
-  is saved to `pyproject.toml.bak`).
+- **retrotool comes from PyPI.** `setup.ps1` installs `retrotool[all]` (>=0.9.3, which
+  bundles the libsfx / asar / bass / xdelta binaries) plus Pillow via `uv pip install`.
+  It does **not** use `uv sync`, so the editable local-checkout pin in the project's
+  `pyproject.toml` (`[tool.uv.sources]`, for the maintainer's machine only) is ignored —
+  nothing local is required.
