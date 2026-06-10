@@ -4,10 +4,10 @@ name: Release
 # one per distribution edition (each release carries a single .zip that bundles
 # its files + the readme):
 #
-#   v1.1-windows     RushingBeatShura_1.1_en_windows.zip   apply_patch.exe + readme
-#   v1.1-linux       RushingBeatShura_1.1_en_linux.zip     apply_patch.py + apply_patch.sh + readme
-#   v1.1-macos       RushingBeatShura_1.1_en_macos.zip     apply_patch.py + apply_patch.command + readme
-#   v1.1-patch-only  RushingBeatShura_1.1_en_patch.zip     rbshura_en.ips + .xdelta + readme
+#   v1.2-windows     RushingBeatShura_1.2_en_windows.zip   apply_patch.exe + readme
+#   v1.2-linux       RushingBeatShura_1.2_en_linux.zip     apply_patch.py + apply_patch.sh + readme
+#   v1.2-macos       RushingBeatShura_1.2_en_macos.zip     apply_patch.py + apply_patch.command + readme
+#   v1.2-patch-only  RushingBeatShura_1.2_en_patch.zip     rbshura_en.ips + .xdelta + readme
 #
 # IMPORTANT: this workflow does NOT build the ROM or the patches — the Japanese
 # source ROM is copyright-gitignored and never reaches CI. The patches
@@ -38,7 +38,7 @@ jobs:
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      VER: "1.1"
+      VER: "1.2"
     steps:
       - uses: actions/checkout@v4
 
