@@ -168,6 +168,13 @@ SCENARIO_CONFIG: dict[str, dict] = {
     },
 }
 
+# `forced_wrap`: the in-game renderer force-wraps at `cols_per_line` (the
+# intro pixel-wraps — long lines fold, they don't run off-screen), so the
+# width-overflow check would only produce false alarms there. The dialog
+# typewriter and the narration render-at-once loop do NOT wrap — a line only
+# breaks at an explicit [FD] — so those stay checked (forced_wrap absent).
+SCENARIO_CONFIG["intro"]["forced_wrap"] = True
+
 # Half-width font geometry (matches apply_pk_font.py / the in-game renderer)
 GLYPH_W = 8
 GLYPH_H = 16
@@ -624,26 +631,21 @@ def body_byte_count(
     return total
 
 
-def body_to_lines(
+def _parse_pages(
     body: str,
     char_to_byte: dict[str, int],
     cfg: Optional[dict] = None,
-) -> list:
-    """Parse a body into renderable lines. Returns a list where each item is
-    either a list[int] of glyph indices (a line) or None (page-break gutter).
+) -> list[list[list[int]]]:
+    """Parse a body into pages of EXPLICIT lines (glyph-index lists) —
+    a new line only at [FD], a new page only at [FE] (dialog convention).
+    No soft-wrapping happens here; this is the shared front half of
+    body_to_lines (which wraps for display) and body_overflow (which must
+    see the pre-wrap widths the game engine actually renders).
 
-    `cfg` overrides parse behavior per-file:
-      - `kanji_escape: True`  → FE XX is a 2-byte kanji index (emitted as
-        256 + XX so the renderer can route to the kanji atlas). Defaults to
-        False (dialog convention: FE = 1-byte page break).
-      - `cols_per_line: N`    → soft-wrap width (defaults to COLS_PER_LINE).
-
-    Kanji glyph indices in the returned lines are encoded as `256 + XX`;
-    kana glyphs stay 0..255. Renderer must dispatch on `v >= 256`.
+    Kanji glyph indices are encoded as `256 + XX`; kana stay 0..255.
     """
     cfg = cfg or {}
     kanji_escape = bool(cfg.get("kanji_escape"))
-    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
 
     pages: list[list[list[int]]] = [[[]]]
     def current_line() -> list[int]: return pages[-1][-1]
@@ -719,6 +721,71 @@ def body_to_lines(
             # break, F7 wait, FF terminator, and the FC / F8-FB opcodes are all
             # handled above; this fall-through is "no specific use → skip".)
             i += 1
+    return pages
+
+
+def _line_units(line: list[int]) -> int:
+    """Width of a glyph line in half-cell units: half-width glyphs (kana /
+    Latin, 8 px) count 1, full-width kanji (index ≥ 256, 16 px) count 2 —
+    the same units `cols_per_line` is expressed in."""
+    return sum(2 if g >= 256 else 1 for g in line)
+
+
+def body_overflow(
+    body: str,
+    char_to_byte: dict[str, int],
+    cfg: Optional[dict] = None,
+) -> dict:
+    """Report explicit lines wider than the scenario's allotted width.
+
+    The dialog/narration renderers do NOT wrap — a line only breaks at an
+    explicit [FD] (or page break) — so any line wider than `cols_per_line`
+    runs off the screen in-game. The preview soft-wraps for legibility,
+    which HIDES the problem; this check measures the pre-wrap lines.
+
+    Scenarios whose in-game renderer force-wraps at `cols_per_line` (the
+    intro — see SCENARIO_CONFIG `forced_wrap`) can't overflow by width, so
+    they always report clean.
+
+    Returns {"limit": cols, "lines": [{"line": n, "units": w}, ...]} where
+    `line` is 1-based and counts explicit lines across the whole entry
+    (continuing through page breaks).
+    """
+    cfg = cfg or {}
+    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
+    if cfg.get("forced_wrap"):
+        return {"limit": cols, "lines": []}
+    over: list[dict] = []
+    n = 0
+    for page in _parse_pages(body, char_to_byte, cfg):
+        for ln in page:
+            n += 1
+            units = _line_units(ln)
+            if units > cols:
+                over.append({"line": n, "units": units})
+    return {"limit": cols, "lines": over}
+
+
+def body_to_lines(
+    body: str,
+    char_to_byte: dict[str, int],
+    cfg: Optional[dict] = None,
+) -> list:
+    """Parse a body into renderable lines. Returns a list where each item is
+    either a list[int] of glyph indices (a line) or None (page-break gutter).
+
+    `cfg` overrides parse behavior per-file:
+      - `kanji_escape: True`  → FE XX is a 2-byte kanji index (emitted as
+        256 + XX so the renderer can route to the kanji atlas). Defaults to
+        False (dialog convention: FE = 1-byte page break).
+      - `cols_per_line: N`    → soft-wrap width (defaults to COLS_PER_LINE).
+
+    Kanji glyph indices in the returned lines are encoded as `256 + XX`;
+    kana glyphs stay 0..255. Renderer must dispatch on `v >= 256`.
+    """
+    cfg = cfg or {}
+    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
+    pages = _parse_pages(body, char_to_byte, cfg)
 
     # Flatten + word-wrap. With `mixed_width=True`, `cols` is in half-cell
     # units: half-width glyphs (kana, Latin) count as 1, full-width glyphs
@@ -981,10 +1048,16 @@ class Bridge:
                 1 for e in sc.entries
                 if re.search(r"[A-Za-z]{2,}", e["body"])
             )
+            cfg = self._cfg_for(name)
+            overflow = sum(
+                1 for e in sc.entries
+                if body_overflow(e["body"], self.char_to_byte, cfg)["lines"]
+            )
             out.append({
                 "name": name,
                 "entries": len(sc.entries),
                 "translated": translated,
+                "overflow": overflow,
             })
         return out
 
@@ -992,15 +1065,20 @@ class Bridge:
         sc = self.scenarios.get(scenario_name)
         if sc is None:
             return []
+        cfg = self._cfg_for(scenario_name)
         out = []
         for i, e in enumerate(sc.entries):
             preview = re.sub(r"\[[^\]]*\]", "", e["body"]).strip()[:60]
             translated = bool(re.search(r"[A-Za-z]{2,}", e["body"]))
+            overflow = bool(
+                body_overflow(e["body"], self.char_to_byte, cfg)["lines"]
+            )
             out.append({
                 "i": i,
                 "idx": e["idx"],
                 "preview": preview,
                 "translated": translated,
+                "overflow": overflow,
             })
         return out
 
@@ -1044,6 +1122,7 @@ class Bridge:
             "preview_png": f"data:image/png;base64,{b64}",
             "byte_count": byte_count,
             "jp_byte_count": jp_byte_count,
+            "overflow": body_overflow(e["body"], self.char_to_byte, cfg),
         }
 
     def render_body(self, body: str, scenario_name: str = "") -> dict:
@@ -1064,6 +1143,7 @@ class Bridge:
         return {
             "png": "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
             "byte_count": body_byte_count(body, self.char_to_byte, cfg),
+            "overflow": body_overflow(body, self.char_to_byte, cfg),
         }
 
     # ---- autosave (debounced) ----
@@ -1389,6 +1469,21 @@ textarea { flex: 1; font-family: var(--code); font-size: 13px; line-height: 1.5;
 textarea:focus { border-color: var(--acc); }
 textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; }
 
+/* Width-overflow indication: a line wider than the scenario's cols_per_line
+   would run off the screen in-game (no auto-wrap in the dialog/narration
+   renderers) — paint the script block red. */
+textarea.overflow, textarea.overflow:focus {
+  border-color: #ff3344; box-shadow: 0 0 0 1px #ff3344,
+                                     0 0 8px rgba(255,51,68,.35); }
+.ovf-badge { display: none; color: #ff3344; font-size: 10px;
+             font-family: var(--code); font-weight: 700; margin-left: 6px; }
+.ovf-badge.on { display: inline; }
+.item .ovf { color: #ff3344; font-weight: 700; font-size: 10px;
+             letter-spacing: .5px; }
+.item.overflow { border-left: 3px solid #ff3344; padding-left: 9px;
+                 background: rgba(255,51,68,.07); }
+.item.overflow.active { border-left-color: #ff3344; }
+
 /* Find/replace bar — slides down from the toolbar. */
 .findbar { display: none; padding: 8px 12px; background: var(--bg2);
            border-bottom: 1px solid var(--brd);
@@ -1491,7 +1586,8 @@ textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; 
             <span style="color:var(--grn);font-size:9px;">editable</span>
             <span id="body-bytes" style="color:var(--fg2);font-size:10px;
                                          margin-left:6px;font-family:var(--code);"
-                  title="encoded byte length (what the build will write)"></span></label>
+                  title="encoded byte length (what the build will write)"></span>
+            <span id="body-overflow" class="ovf-badge"></span></label>
           <textarea id="body" spellcheck="false" placeholder="select an entry"></textarea>
         </div>
         <div class="text-col">
@@ -1564,7 +1660,10 @@ async function loadScenarios() {
     div.className = 'item';
     div.dataset.name = it.name;
     const pct = it.entries ? Math.round(100 * it.translated / it.entries) : 0;
-    div.innerHTML = `<div>${it.name.replace('scenario_', 'scen ')}</div>
+    const ovf = it.overflow
+      ? ` <span class="ovf" title="${it.overflow} entr${it.overflow === 1 ? 'y' : 'ies'} with text wider than the screen">⚠ ${it.overflow}</span>`
+      : '';
+    div.innerHTML = `<div>${it.name.replace('scenario_', 'scen ')}${ovf}</div>
                      <div class="meta">${it.translated}/${it.entries} translated · ${pct}%</div>`;
     div.onclick = () => selectScenario(it.name);
     list.appendChild(div);
@@ -1621,7 +1720,11 @@ async function selectScenario(name) {
     div.className = 'item ' + (e.translated ? 'translated' : 'untranslated');
     div.dataset.i = e.i;
     const marker = e.translated ? '●' : '○';
-    div.innerHTML = `<div><span class="marker">${marker}</span> #${e.idx}</div>
+    const ovf = e.overflow
+      ? ' <span class="ovf" title="a line is wider than the allotted width — text runs off-screen in-game">⚠ OVERFLOW</span>'
+      : '';
+    if (e.overflow) div.classList.add('overflow');
+    div.innerHTML = `<div><span class="marker">${marker}</span> #${e.idx}${ovf}</div>
                      <div class="meta">${escapeHtml(e.preview) || '(empty)'}</div>`;
     div.onclick = () => selectEntry(e.i);
     list.appendChild(div);
@@ -1642,6 +1745,7 @@ async function selectEntry(i) {
   document.getElementById('preview-img').src = e.preview_png;
   setBodyBytes(e.byte_count);
   setJpBodyBytes(e.jp_byte_count);
+  setOverflow(e.overflow);
   document.getElementById('ent-label').textContent =
     `${CURRENT.scenario} · entry #${i}`;
   // Loading a new entry resets the badge to idle — any pending save from
@@ -1675,6 +1779,42 @@ function setBodyBytes(n) {
   if (!el) return;
   if (n == null) { el.textContent = ''; return; }
   el.textContent = n + ' B';
+}
+
+function markEntryOverflow(entryI, over) {
+  // Toggle the ⚠ marker + red edge on one entry-list row in place (used by
+  // the live-edit path so the list stays truthful without a full reload).
+  const item = document.querySelector(`#ent-list .item[data-i="${entryI}"]`);
+  if (!item) return;
+  item.classList.toggle('overflow', over);
+  const head = item.querySelector('div');
+  let badge = item.querySelector('.ovf');
+  if (over && !badge) {
+    badge = document.createElement('span');
+    badge.className = 'ovf';
+    badge.title = 'a line is wider than the allotted width — text runs off-screen in-game';
+    badge.textContent = ' ⚠ OVERFLOW';
+    head.appendChild(badge);
+  } else if (!over && badge) {
+    badge.remove();
+  }
+}
+
+function setOverflow(o) {
+  // Red indication when any explicit line is wider than the scenario's
+  // allotted width (in-game the line would run off the screen). `o` is
+  // {limit, lines:[{line, units}]} from the bridge; null/empty clears it.
+  const badge = document.getElementById('body-overflow');
+  const ta = document.getElementById('body');
+  const over = o && o.lines && o.lines.length;
+  ta.classList.toggle('overflow', !!over);
+  badge.classList.toggle('on', !!over);
+  if (!over) { badge.textContent = ''; badge.title = ''; return; }
+  const nums = o.lines.map(l => l.line).join(', ');
+  badge.textContent = `⚠ line ${nums} over ${o.limit}-col width`;
+  badge.title = o.lines
+    .map(l => `line ${l.line}: ${l.units}/${o.limit} cols — runs off-screen in-game`)
+    .join('\n');
 }
 
 function setJpBodyBytes(n) {
@@ -1721,6 +1861,10 @@ document.getElementById('body').addEventListener('input', () => {
       const r = await pywebview.api.render_body(body, CURRENT.scenario);
       document.getElementById('preview-img').src = r.png;
       setBodyBytes(r.byte_count);
+      setOverflow(r.overflow);
+      // Keep the entry list's ⚠ in sync as the user types.
+      markEntryOverflow(CURRENT.entry_i,
+                        !!(r.overflow && r.overflow.lines.length));
       await pywebview.api.queue_save(CURRENT.scenario, CURRENT.entry_i, body);
       // queue_save returns immediately; the file write happens ~400ms later
       // on a Python Timer. Poll get_save_state() to know when it lands.
