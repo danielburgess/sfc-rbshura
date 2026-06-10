@@ -105,8 +105,8 @@ wheels = [
 
 [[package]]
 name = "retrotool"
-version = "0.9.2"
-source = { editable = "../../../crucial/projects/retrotool" }
+version = "0.9.3"
+source = { editable = "../../retrotool" }
 dependencies = [
     { name = "chardet" },
     { name = "defusedxml" },
@@ -130,17 +130,17 @@ provides-extras = ["libsfx", "asar", "bass", "xdelta", "all"]
 [[package]]
 name = "retrotool-asar"
 version = "1.91"
-source = { editable = "../../../crucial/projects/retrotool/packages/retrotool-asar" }
+source = { editable = "../../retrotool/packages/retrotool-asar" }
 
 [[package]]
 name = "retrotool-libsfx"
 version = "2026.5.15"
-source = { editable = "../../../crucial/projects/retrotool/packages/retrotool-libsfx" }
+source = { editable = "../../retrotool/packages/retrotool-libsfx" }
 
 [[package]]
 name = "retrotool-xdelta"
 version = "3.1.1"
-source = { editable = "../../../crucial/projects/retrotool/packages/retrotool-xdelta" }
+source = { editable = "../../retrotool/packages/retrotool-xdelta" }
 
 [[package]]
 name = "sfc-rbshura"
@@ -159,8 +159,8 @@ dependencies = [
 requires-dist = [
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pip", specifier = ">=26.0.1" },
-    { name = "retrotool", editable = "../../../crucial/projects/retrotool" },
-    { name = "retrotool-asar", editable = "../../../crucial/projects/retrotool/packages/retrotool-asar" },
-    { name = "retrotool-libsfx", editable = "../../../crucial/projects/retrotool/packages/retrotool-libsfx" },
-    { name = "retrotool-xdelta", editable = "../../../crucial/projects/retrotool/packages/retrotool-xdelta" },
+    { name = "retrotool", editable = "../../retrotool" },
+    { name = "retrotool-asar", editable = "../../retrotool/packages/retrotool-asar" },
+    { name = "retrotool-libsfx", editable = "../../retrotool/packages/retrotool-libsfx" },
+    { name = "retrotool-xdelta", editable = "../../retrotool/packages/retrotool-xdelta" },
 ]

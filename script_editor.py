@@ -7,14 +7,19 @@ matches the in-game dialog rendering:
   - Half-width font: each glyph is 8x16 (1 tile column wide × 2 tiles tall),
     matching the apply_pk_font.py tight renderer that ships in the build.
   - 24 chars per line (192 px wide text region — the in-game dialog box).
-  - Control codes parsed and visualized: [FD]=newline, [FE]=page break,
-    [F7:FF]=page-wait, [FB:XX]=window cmd, [FC:...] etc.
+  - Control codes: only those with a visual meaning are rendered — [FD]=newline,
+    [FE]=page break. Every OTHER bracketed [XX] byte is IGNORED for preview (its
+    params consumed): F7 (page-wait), the FC/F8-FB opcodes, and raw bytes like
+    narration VRAM-dest positioning words ([10][2A]). Concatenated forms
+    ([FC021408], [F904], [F7FF]) are split into their bytes. This keeps control
+    codes from rendering as phantom spaces or spurious line breaks — e.g.
+    [F7FF][FB10][FE][F708] is a single page break, nothing else.
 
 Autosave: debounced (~400 ms) per-entry; writes are atomic via temp+rename.
 
-Portrait preview is a static placeholder showing the speaker name parsed
-from the entry's [F9:XX] control code. Real sprite + animation is a
-follow-up (needs portrait-table RE).
+Text color follows the speaker palette set by the [F9:XX] control code (the
+per-speaker palette table at ROM $058313) — applied to the preview glyphs.
+No portrait sprite/name is shown (the old placeholder was inaccurate).
 """
 from __future__ import annotations
 
@@ -90,7 +95,6 @@ _PROJECT = _load_project_config(ROOT)
 DEFAULT_EN_DATA_DIR = _PROJECT.get("data_dir") or (ROOT / "data" / "en")
 DEFAULT_JP_DATA_DIR = _PROJECT.get("jp_dir") or (ROOT / "data" / "jp")
 EN_TABLE_PATH = _PROJECT.get("table") or (ROOT / "tables" / "rbshura_en.tbl")
-PORTRAIT_ASSETS = ROOT / "assets" / "portraits"
 
 # Per-user editor state (last scenario / entry / cursor + folder config).
 # Project-local so it travels with the checkout if someone re-clones.
@@ -164,6 +168,13 @@ SCENARIO_CONFIG: dict[str, dict] = {
     },
 }
 
+# `forced_wrap`: the in-game renderer force-wraps at `cols_per_line` (the
+# intro pixel-wraps — long lines fold, they don't run off-screen), so the
+# width-overflow check would only produce false alarms there. The dialog
+# typewriter and the narration render-at-once loop do NOT wrap — a line only
+# breaks at an explicit [FD] — so those stay checked (forced_wrap absent).
+SCENARIO_CONFIG["intro"]["forced_wrap"] = True
+
 # Half-width font geometry (matches apply_pk_font.py / the in-game renderer)
 GLYPH_W = 8
 GLYPH_H = 16
@@ -201,15 +212,6 @@ FALLBACK_PALETTE = [
 # screenshots. (Future: extract actual BG2 tilemap + palette per
 # [[project_script_editor]] Step 2.)
 DIALOG_BG = (16, 24, 48, 255)
-
-# Portrait names (parsed from [F9][XX]). NAMES ARE NOT YET VERIFIED — the
-# previous mapping (Dick/Spider/Kythring/McCoy/Jimmy/Dag) was inherited
-# from an older preview script and confirmed wrong by user 2026-05-17.
-# User direction: extract sprites first, identify names visually from those.
-# Currently 2 portraits captured (assets/portraits/pid_00.png and
-# pid_02.png from SplitTrace crops); rest are pending more captures.
-PORTRAIT_NAMES: dict[int, str] = {}  # left empty until verified
-
 
 # ---------------------------------------------------------------------------
 # Font extraction
@@ -550,20 +552,27 @@ def _tokenize_brackets(body: str) -> list:
                 i += 1
                 continue
             token = body[i + 1:end]
-            # Accept any of: [XX], [XX:YY:ZZ] (legacy retrotool dump), or
-            # [XX YY ZZ] (space-separated, what our extractors emit).
-            # Walk the token splitting on either separator.
-            parts = re.split(r"[:\s]+", token.strip())
-            valid = all(len(p) == 2 for p in parts if p)
-            if valid and parts:
-                for part in parts:
-                    if not part:
-                        continue
-                    try:
-                        out.append(("byte", int(part, 16)))
-                    except ValueError:
-                        out.append(("char", "[" + token + "]"))
-                        break
+            # Accept: [XX], [XXYY..] (CONCATENATED, e.g. [FC021408] / [F904]),
+            # [XX:YY:ZZ] (legacy retrotool dump), and [XX YY ZZ] (space-
+            # separated, what our extractors emit). Each separator-delimited
+            # part must be an even-length run of hex digits; split it into
+            # individual bytes. (Without the concatenated case, [FC021408] fell
+            # through to a literal char → the $00 space fallback = phantom
+            # spaces in the preview.)
+            parts = [p for p in re.split(r"[:\s]+", token.strip()) if p]
+            bytes_out: list[int] = []
+            ok = bool(parts)
+            for part in parts:
+                if (len(part) >= 2 and len(part) % 2 == 0
+                        and all(ch in "0123456789abcdefABCDEF" for ch in part)):
+                    bytes_out.extend(
+                        int(part[j:j + 2], 16) for j in range(0, len(part), 2))
+                else:
+                    ok = False
+                    break
+            if ok:
+                for b in bytes_out:
+                    out.append(("byte", b))
             else:
                 # Not a hex-byte bracket — render literal so user sees it.
                 out.append(("char", "[" + token + "]"))
@@ -622,26 +631,21 @@ def body_byte_count(
     return total
 
 
-def body_to_lines(
+def _parse_pages(
     body: str,
     char_to_byte: dict[str, int],
     cfg: Optional[dict] = None,
-) -> list:
-    """Parse a body into renderable lines. Returns a list where each item is
-    either a list[int] of glyph indices (a line) or None (page-break gutter).
+) -> list[list[list[int]]]:
+    """Parse a body into pages of EXPLICIT lines (glyph-index lists) —
+    a new line only at [FD], a new page only at [FE] (dialog convention).
+    No soft-wrapping happens here; this is the shared front half of
+    body_to_lines (which wraps for display) and body_overflow (which must
+    see the pre-wrap widths the game engine actually renders).
 
-    `cfg` overrides parse behavior per-file:
-      - `kanji_escape: True`  → FE XX is a 2-byte kanji index (emitted as
-        256 + XX so the renderer can route to the kanji atlas). Defaults to
-        False (dialog convention: FE = 1-byte page break).
-      - `cols_per_line: N`    → soft-wrap width (defaults to COLS_PER_LINE).
-
-    Kanji glyph indices in the returned lines are encoded as `256 + XX`;
-    kana glyphs stay 0..255. Renderer must dispatch on `v >= 256`.
+    Kanji glyph indices are encoded as `256 + XX`; kana stay 0..255.
     """
     cfg = cfg or {}
     kanji_escape = bool(cfg.get("kanji_escape"))
-    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
 
     pages: list[list[list[int]]] = [[[]]]
     def current_line() -> list[int]: return pages[-1][-1]
@@ -689,13 +693,6 @@ def body_to_lines(
                     i += 1
             else:
                 new_page(); i += 1
-        elif b == 0xF7:
-            # Line-end / page-wait — visualize as a hard break
-            new_line()
-            i += 1
-            # Consume the param byte (the FF / 08 / etc.)
-            if i < len(tokens) and tokens[i][0] == "byte":
-                i += 1
         elif b == 0xFF:
             # Standalone terminator — stop rendering
             break
@@ -716,9 +713,79 @@ def body_to_lines(
             if i < len(tokens) and tokens[i][0] == "byte":
                 i += 1
         else:
-            # Plain printable byte (< 0xF7) → glyph
-            current_line().append(b)
+            # A bracketed [XX] byte with no visual meaning: narration VRAM-dest
+            # positioning words ([10][2A] at a block/line start), stray opcodes,
+            # or other raw control bytes. IGNORE them — renderable glyphs come
+            # from literal characters in the body, not [XX] escapes — so control
+            # codes no longer show up as phantom spaces. (FD newline, FE page-
+            # break, F7 wait, FF terminator, and the FC / F8-FB opcodes are all
+            # handled above; this fall-through is "no specific use → skip".)
             i += 1
+    return pages
+
+
+def _line_units(line: list[int]) -> int:
+    """Width of a glyph line in half-cell units: half-width glyphs (kana /
+    Latin, 8 px) count 1, full-width kanji (index ≥ 256, 16 px) count 2 —
+    the same units `cols_per_line` is expressed in."""
+    return sum(2 if g >= 256 else 1 for g in line)
+
+
+def body_overflow(
+    body: str,
+    char_to_byte: dict[str, int],
+    cfg: Optional[dict] = None,
+) -> dict:
+    """Report explicit lines wider than the scenario's allotted width.
+
+    The dialog/narration renderers do NOT wrap — a line only breaks at an
+    explicit [FD] (or page break) — so any line wider than `cols_per_line`
+    runs off the screen in-game. The preview soft-wraps for legibility,
+    which HIDES the problem; this check measures the pre-wrap lines.
+
+    Scenarios whose in-game renderer force-wraps at `cols_per_line` (the
+    intro — see SCENARIO_CONFIG `forced_wrap`) can't overflow by width, so
+    they always report clean.
+
+    Returns {"limit": cols, "lines": [{"line": n, "units": w}, ...]} where
+    `line` is 1-based and counts explicit lines across the whole entry
+    (continuing through page breaks).
+    """
+    cfg = cfg or {}
+    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
+    if cfg.get("forced_wrap"):
+        return {"limit": cols, "lines": []}
+    over: list[dict] = []
+    n = 0
+    for page in _parse_pages(body, char_to_byte, cfg):
+        for ln in page:
+            n += 1
+            units = _line_units(ln)
+            if units > cols:
+                over.append({"line": n, "units": units})
+    return {"limit": cols, "lines": over}
+
+
+def body_to_lines(
+    body: str,
+    char_to_byte: dict[str, int],
+    cfg: Optional[dict] = None,
+) -> list:
+    """Parse a body into renderable lines. Returns a list where each item is
+    either a list[int] of glyph indices (a line) or None (page-break gutter).
+
+    `cfg` overrides parse behavior per-file:
+      - `kanji_escape: True`  → FE XX is a 2-byte kanji index (emitted as
+        256 + XX so the renderer can route to the kanji atlas). Defaults to
+        False (dialog convention: FE = 1-byte page break).
+      - `cols_per_line: N`    → soft-wrap width (defaults to COLS_PER_LINE).
+
+    Kanji glyph indices in the returned lines are encoded as `256 + XX`;
+    kana glyphs stay 0..255. Renderer must dispatch on `v >= 256`.
+    """
+    cfg = cfg or {}
+    cols = int(cfg.get("cols_per_line", COLS_PER_LINE))
+    pages = _parse_pages(body, char_to_byte, cfg)
 
     # Flatten + word-wrap. With `mixed_width=True`, `cols` is in half-cell
     # units: half-width glyphs (kana, Latin) count as 1, full-width glyphs
@@ -884,35 +951,22 @@ def render_preview(
 # ---------------------------------------------------------------------------
 
 def extract_portrait_id(body: str) -> Optional[int]:
-    """Find the most recent [F9][XX] in the entry body and return XX as int.
-    Accepts both the canonical two-bracket form (`[F9][02]`) and the
-    legacy colon form (`[F9:02]`) just in case."""
-    # Two-bracket form: `[F9]` immediately followed by `[XX]` (optionally
-    # with whitespace between).
-    m = re.search(r"\[F9\]\s*\[([0-9A-Fa-f]{1,2})\]", body)
-    if m:
-        return int(m.group(1), 16)
-    m = re.search(r"\[F9:([0-9A-Fa-f]+)\]", body)
-    return int(m.group(1), 16) if m else None
+    """Return the speaker-palette id set by the first `F9 XX` control code in
+    the body (the in-game text-color select; see [[project_dialog_color_engine]]
+    — F9 loads the per-speaker palette at $058313). Drives the preview's glyph
+    color only — NOT a portrait sprite.
 
-
-def portrait_name(pid: int) -> str:
-    return PORTRAIT_NAMES.get(pid, f"Portrait #{pid:02X}")
-
-
-def portrait_image_uri(pid: Optional[int]) -> Optional[str]:
-    """Return a `data:image/png;base64,...` URI for the portrait sprite of
-    the given pid, or None if no asset is available yet. Assets live in
-    assets/portraits/pid_XX.png (XX = uppercase hex). Currently sourced
-    from SplitTrace screen crops; will move to ROM-direct extraction once
-    we RE the sprite-data path."""
-    if pid is None:
-        return None
-    candidate = PORTRAIT_ASSETS / f"pid_{pid:02X}.png"
-    if not candidate.exists():
-        return None
-    data = candidate.read_bytes()
-    return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+    Handles every bracket form the data uses by tokenizing: concatenated
+    `[F904]`, two-bracket `[F9][04]`, and colon `[F9:04]` all decode to bytes
+    F9, 04. (The concatenated form is what the scenarios actually contain;
+    the old regex only matched the other two, so the color never applied.)
+    """
+    toks = _tokenize_brackets(body)
+    for i, (kind, val) in enumerate(toks):
+        if kind == "byte" and val == 0xF9:
+            if i + 1 < len(toks) and toks[i + 1][0] == "byte":
+                return toks[i + 1][1]
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -994,10 +1048,16 @@ class Bridge:
                 1 for e in sc.entries
                 if re.search(r"[A-Za-z]{2,}", e["body"])
             )
+            cfg = self._cfg_for(name)
+            overflow = sum(
+                1 for e in sc.entries
+                if body_overflow(e["body"], self.char_to_byte, cfg)["lines"]
+            )
             out.append({
                 "name": name,
                 "entries": len(sc.entries),
                 "translated": translated,
+                "overflow": overflow,
             })
         return out
 
@@ -1005,18 +1065,20 @@ class Bridge:
         sc = self.scenarios.get(scenario_name)
         if sc is None:
             return []
+        cfg = self._cfg_for(scenario_name)
         out = []
         for i, e in enumerate(sc.entries):
             preview = re.sub(r"\[[^\]]*\]", "", e["body"]).strip()[:60]
             translated = bool(re.search(r"[A-Za-z]{2,}", e["body"]))
-            pid = extract_portrait_id(e["body"])
+            overflow = bool(
+                body_overflow(e["body"], self.char_to_byte, cfg)["lines"]
+            )
             out.append({
                 "i": i,
                 "idx": e["idx"],
                 "preview": preview,
                 "translated": translated,
-                "portrait_id": pid,
-                "portrait_name": portrait_name(pid) if pid is not None else None,
+                "overflow": overflow,
             })
         return out
 
@@ -1058,11 +1120,9 @@ class Bridge:
             "body": e["body"],
             "jp_body": jp_body,
             "preview_png": f"data:image/png;base64,{b64}",
-            "portrait_id": pid,
-            "portrait_name": portrait_name(pid) if pid is not None else None,
-            "portrait_image": portrait_image_uri(pid),
             "byte_count": byte_count,
             "jp_byte_count": jp_byte_count,
+            "overflow": body_overflow(e["body"], self.char_to_byte, cfg),
         }
 
     def render_body(self, body: str, scenario_name: str = "") -> dict:
@@ -1083,6 +1143,7 @@ class Bridge:
         return {
             "png": "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
             "byte_count": body_byte_count(body, self.char_to_byte, cfg),
+            "overflow": body_overflow(body, self.char_to_byte, cfg),
         }
 
     # ---- autosave (debounced) ----
@@ -1393,17 +1454,6 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
            display: flex; gap: 16px; align-items: flex-start;
            overflow-y: auto; overflow-x: auto; }
 .preview img { display: block; }
-.portrait-box { width: 110px; flex: 0 0 110px; display: flex; flex-direction: column;
-                gap: 6px; align-items: center; }
-.portrait { width: 96px; height: 120px; background: var(--bg2); border: 1px solid var(--brd);
-            display: flex; align-items: center; justify-content: center;
-            color: var(--fg2); font-size: 10px; text-align: center;
-            image-rendering: pixelated; image-rendering: crisp-edges;
-            overflow: hidden; }
-.portrait img { width: 100%; height: 100%; object-fit: contain;
-                image-rendering: pixelated; image-rendering: crisp-edges; }
-.portrait-name { font-size: 11px; color: var(--fg); text-align: center; }
-.portrait-pid { font-size: 10px; color: var(--fg2); font-family: var(--code); }
 .preview img { image-rendering: pixelated; image-rendering: crisp-edges; }
 .text-area { flex: 1; display: grid; grid-template-columns: 1fr 1fr;
              gap: 8px; padding: 12px; overflow: hidden; }
@@ -1418,6 +1468,21 @@ textarea { flex: 1; font-family: var(--code); font-size: 13px; line-height: 1.5;
            min-width: 0; }
 textarea:focus { border-color: var(--acc); }
 textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; }
+
+/* Width-overflow indication: a line wider than the scenario's cols_per_line
+   would run off the screen in-game (no auto-wrap in the dialog/narration
+   renderers) — paint the script block red. */
+textarea.overflow, textarea.overflow:focus {
+  border-color: #ff3344; box-shadow: 0 0 0 1px #ff3344,
+                                     0 0 8px rgba(255,51,68,.35); }
+.ovf-badge { display: none; color: #ff3344; font-size: 10px;
+             font-family: var(--code); font-weight: 700; margin-left: 6px; }
+.ovf-badge.on { display: inline; }
+.item .ovf { color: #ff3344; font-weight: 700; font-size: 10px;
+             letter-spacing: .5px; }
+.item.overflow { border-left: 3px solid #ff3344; padding-left: 9px;
+                 background: rgba(255,51,68,.07); }
+.item.overflow.active { border-left-color: #ff3344; }
 
 /* Find/replace bar — slides down from the toolbar. */
 .findbar { display: none; padding: 8px 12px; background: var(--bg2);
@@ -1513,11 +1578,6 @@ textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; 
     <div class="search-results" id="search-results"></div>
     <div class="panes" id="panes" style="display:none">
       <div class="preview">
-        <div class="portrait-box">
-          <div class="portrait" id="portrait">no<br>portrait</div>
-          <div class="portrait-pid" id="portrait-pid"></div>
-          <div class="portrait-name" id="portrait-name"></div>
-        </div>
         <img id="preview-img" alt="preview" />
       </div>
       <div class="text-area">
@@ -1526,7 +1586,8 @@ textarea[readonly] { background: var(--bg); color: var(--fg2); cursor: default; 
             <span style="color:var(--grn);font-size:9px;">editable</span>
             <span id="body-bytes" style="color:var(--fg2);font-size:10px;
                                          margin-left:6px;font-family:var(--code);"
-                  title="encoded byte length (what the build will write)"></span></label>
+                  title="encoded byte length (what the build will write)"></span>
+            <span id="body-overflow" class="ovf-badge"></span></label>
           <textarea id="body" spellcheck="false" placeholder="select an entry"></textarea>
         </div>
         <div class="text-col">
@@ -1599,7 +1660,10 @@ async function loadScenarios() {
     div.className = 'item';
     div.dataset.name = it.name;
     const pct = it.entries ? Math.round(100 * it.translated / it.entries) : 0;
-    div.innerHTML = `<div>${it.name.replace('scenario_', 'scen ')}</div>
+    const ovf = it.overflow
+      ? ` <span class="ovf" title="${it.overflow} entr${it.overflow === 1 ? 'y' : 'ies'} with text wider than the screen">⚠ ${it.overflow}</span>`
+      : '';
+    div.innerHTML = `<div>${it.name.replace('scenario_', 'scen ')}${ovf}</div>
                      <div class="meta">${it.translated}/${it.entries} translated · ${pct}%</div>`;
     div.onclick = () => selectScenario(it.name);
     list.appendChild(div);
@@ -1656,8 +1720,11 @@ async function selectScenario(name) {
     div.className = 'item ' + (e.translated ? 'translated' : 'untranslated');
     div.dataset.i = e.i;
     const marker = e.translated ? '●' : '○';
-    const speaker = e.portrait_name ? ` <span class="meta">${e.portrait_name}</span>` : '';
-    div.innerHTML = `<div><span class="marker">${marker}</span> #${e.idx}${speaker}</div>
+    const ovf = e.overflow
+      ? ' <span class="ovf" title="a line is wider than the allotted width — text runs off-screen in-game">⚠ OVERFLOW</span>'
+      : '';
+    if (e.overflow) div.classList.add('overflow');
+    div.innerHTML = `<div><span class="marker">${marker}</span> #${e.idx}${ovf}</div>
                      <div class="meta">${escapeHtml(e.preview) || '(empty)'}</div>`;
     div.onclick = () => selectEntry(e.i);
     list.appendChild(div);
@@ -1678,22 +1745,7 @@ async function selectEntry(i) {
   document.getElementById('preview-img').src = e.preview_png;
   setBodyBytes(e.byte_count);
   setJpBodyBytes(e.jp_byte_count);
-  const portraitBox = document.getElementById('portrait');
-  const portraitPid = document.getElementById('portrait-pid');
-  const portraitName = document.getElementById('portrait-name');
-  if (e.portrait_id === null) {
-    portraitBox.innerHTML = 'no<br>F9';
-    portraitPid.textContent = '';
-    portraitName.textContent = '';
-  } else {
-    portraitPid.textContent = 'PID 0x' + e.portrait_id.toString(16).toUpperCase().padStart(2,'0');
-    portraitName.textContent = e.portrait_name || '';
-    if (e.portrait_image) {
-      portraitBox.innerHTML = `<img src="${e.portrait_image}" alt="portrait">`;
-    } else {
-      portraitBox.innerHTML = 'sprite<br>pending';
-    }
-  }
+  setOverflow(e.overflow);
   document.getElementById('ent-label').textContent =
     `${CURRENT.scenario} · entry #${i}`;
   // Loading a new entry resets the badge to idle — any pending save from
@@ -1727,6 +1779,42 @@ function setBodyBytes(n) {
   if (!el) return;
   if (n == null) { el.textContent = ''; return; }
   el.textContent = n + ' B';
+}
+
+function markEntryOverflow(entryI, over) {
+  // Toggle the ⚠ marker + red edge on one entry-list row in place (used by
+  // the live-edit path so the list stays truthful without a full reload).
+  const item = document.querySelector(`#ent-list .item[data-i="${entryI}"]`);
+  if (!item) return;
+  item.classList.toggle('overflow', over);
+  const head = item.querySelector('div');
+  let badge = item.querySelector('.ovf');
+  if (over && !badge) {
+    badge = document.createElement('span');
+    badge.className = 'ovf';
+    badge.title = 'a line is wider than the allotted width — text runs off-screen in-game';
+    badge.textContent = ' ⚠ OVERFLOW';
+    head.appendChild(badge);
+  } else if (!over && badge) {
+    badge.remove();
+  }
+}
+
+function setOverflow(o) {
+  // Red indication when any explicit line is wider than the scenario's
+  // allotted width (in-game the line would run off the screen). `o` is
+  // {limit, lines:[{line, units}]} from the bridge; null/empty clears it.
+  const badge = document.getElementById('body-overflow');
+  const ta = document.getElementById('body');
+  const over = o && o.lines && o.lines.length;
+  ta.classList.toggle('overflow', !!over);
+  badge.classList.toggle('on', !!over);
+  if (!over) { badge.textContent = ''; badge.title = ''; return; }
+  const nums = o.lines.map(l => l.line).join(', ');
+  badge.textContent = `⚠ line ${nums} over ${o.limit}-col width`;
+  badge.title = o.lines
+    .map(l => `line ${l.line}: ${l.units}/${o.limit} cols — runs off-screen in-game`)
+    .join('\n');
 }
 
 function setJpBodyBytes(n) {
@@ -1773,6 +1861,10 @@ document.getElementById('body').addEventListener('input', () => {
       const r = await pywebview.api.render_body(body, CURRENT.scenario);
       document.getElementById('preview-img').src = r.png;
       setBodyBytes(r.byte_count);
+      setOverflow(r.overflow);
+      // Keep the entry list's ⚠ in sync as the user types.
+      markEntryOverflow(CURRENT.entry_i,
+                        !!(r.overflow && r.overflow.lines.length));
       await pywebview.api.queue_save(CURRENT.scenario, CURRENT.entry_i, body);
       // queue_save returns immediately; the file write happens ~400ms later
       // on a Python Timer. Poll get_save_state() to know when it lands.
