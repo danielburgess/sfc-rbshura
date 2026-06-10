@@ -37,9 +37,16 @@ localization.
 
 ## Status
 
-**1.1 release.** The translation is complete and the build is verified.
+**1.2 release.** The translation is complete and the build is verified.
 
 ### Changelog
+
+**1.2**
+- Script/dialogue pass: fixed lines that ran past the dialog-box width
+  (text running off-screen), including a few malformed line-break codes —
+  found with a new width-overflow checker added to the script editor.
+- Translation corrections and refinements across several scenarios, including
+  issues from a user report and lines re-evaluated after seeing them in-game.
 
 **1.1**
 - Fixed a background-graphics corruption on the Metal Frame Factory stage. The

@@ -30,7 +30,7 @@ import sys
 
 from _paths import ROOT, OUT, DIST, PRISTINE_ROM, BUILT_ROM
 
-VERSION = "v1.1"
+VERSION = "v1.2"
 TITLE = "Rushing Beat Shura: The Eternal Conflict"
 OUTPUT_NAME = "Rushing Beat Shura (English).sfc"
 
