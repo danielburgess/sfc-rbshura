@@ -321,6 +321,18 @@ kind = "asar"
 cache = "1"
 file = "patches/intro_credit.asm"
 
+# VS-screen name plates — REGENERATED from char_names every build. The VS
+# (2P battle) screen has its own pre-built tilemap block in bank $1F (six
+# 8-char slots of [ascii, $30] words at PC $1FD9A3) which the stock ROM even
+# misspells ("M-FLAME", Jaleco's own L/R slip). tools/encode_vs_names.py
+# rebuilds all six plates from the active language's data/<lang>/
+# char_names.txt (entries 10/2/0/8/4/6, centered like stock), so the VS
+# screen always matches the HUD + char-select names — single source of truth.
+[[rom.build.sections]]
+kind = "python"
+file = "tools/encode_vs_names.py"
+offset = "$1FD9A3"
+
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads
 # data/{en,jp}/intro.txt + tables/rbshura_en.tbl and encodes at build time.
