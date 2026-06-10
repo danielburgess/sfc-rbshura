@@ -20,7 +20,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 VENV=./.venv/bin
-[ -x "$VENV/retrotool" ] || { echo "error: run 'uv sync' first (no $VENV/retrotool)"; exit 1; }
+[ -x "$VENV/retrotool" ] || { echo "error: no $VENV/retrotool — run scripts/setup.sh first (maintainers: 'uv sync')"; exit 1; }
 [ -f roms/rbshura.sfc ]  || { echo "error: place the pristine JP ROM at roms/rbshura.sfc"; exit 1; }
 
 do_patcher=0
