@@ -333,6 +333,18 @@ kind = "python"
 file = "tools/encode_vs_names.py"
 offset = "$1FD9A3"
 
+# Bordered roster name plates (the THIRD name copy) — same generator, second
+# entry point. Six fixed 20-byte records at $018AD4 (`[NAME]` with A5/A6
+# border tiles, chars attr $10) addressed by the per-character pointer table
+# at $018AC8 (left untouched; the bank-$01 reader queues a 20-byte copy to
+# tilemap $5B43/$5B53 per player). Regenerated from char_names like the VS
+# block, so all three name stores stay in sync per language.
+[[rom.build.sections]]
+kind = "python"
+file = "tools/encode_vs_names.py"
+func = "build_select"
+offset = "$018AD4"
+
 # Intro narrative is now a DataDef at tables/intro.toml (fixed-records
 # encoding) instead of an inline pre-encoded bin section. Retrotool reads
 # data/{en,jp}/intro.txt + tables/rbshura_en.tbl and encodes at build time.
