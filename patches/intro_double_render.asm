@@ -85,9 +85,11 @@ NewIntroRenderer:
     LDA #$80
     STA $0E22,X             ; VMAINC for record 0
     STA $0E2A,X             ; VMAINC for record 1
-    LDA #$D0
-    STA $0E25,X             ; DMA src bank for record 0 = $D0 (PK font)
-    STA $0E2D,X             ; DMA src bank for record 1 = $D0
+    LDA #$E2
+    STA $0E25,X             ; DMA src bank for record 0 = $E2 (extended EN+PT
+    STA $0E2D,X             ; DMA src bank for record 1 = $E2  font, see
+                            ; patches/font_reloc.asm — $D0 lacks the accent
+                            ; glyphs in slots $4C-$58)
 
     REP #$20                ; M=0 (16-bit A)
     LDA $1E9F

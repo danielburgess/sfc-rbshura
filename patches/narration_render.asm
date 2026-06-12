@@ -115,7 +115,7 @@ NarrationHalfWidth:
     LSR A                       ; index*64  (our 64 B font slots)
     STA $04                     ; $04 = font byte offset (src)
 
-    ; --- DMA top tile: $D0:src -> VRAM[$02], 1 tile (16 B) ---
+    ; --- DMA top tile: !FONT_BANK:src -> VRAM[$02], 1 tile (16 B) ---
     LDA $02
     STA $2116
     STZ $420B
@@ -126,7 +126,7 @@ NarrationHalfWidth:
     LDX #$0000
     STX $4302                   ; A1T0 low/high
     LDA #!FONT_BANK
-    STA $4304                   ; A1B0 = $D0 (font bank)
+    STA $4304                   ; A1B0 = !FONT_BANK ($E2, extended EN+PT font)
     LDX #$0010
     STX $4305                   ; DAS0 = $10 (16 B = 1 tile) -- HALF-WIDTH
     LDA $04
@@ -134,7 +134,7 @@ NarrationHalfWidth:
     LDA #$0001
     STA $420B                   ; trigger DMA ch0
 
-    ; --- DMA bottom tile: $D0:src+$10 -> VRAM[$02+$100] ---
+    ; --- DMA bottom tile: !FONT_BANK:src+$10 -> VRAM[$02+$100] ---
     LDA $02
     CLC
     ADC #$0100                  ; +$100 words = one tilemap row below
